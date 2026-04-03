@@ -5,6 +5,7 @@ import { slugify } from '../lib/slugify.js';
 import { saveHandleToIDB } from '../lib/fs.js';
 import { useUiStore } from './uiStore.js';
 import { getGlobalBuiltInFiles, getGlobalUserContent, migrateOldVaultContent } from '../lib/vaultLoader.js';
+import { isConfigured as ghConfigured, fetchVaultFiles } from '../lib/github.js';
 
 export const useGraphStore = create((set, get) => ({
   // ── State ─────────────────────────────────────────────────────────────────
@@ -46,6 +47,35 @@ export const useGraphStore = create((set, get) => ({
     const { nodes: raw, warnings: scanW, rawContentCache } = storage.loadVaultFiles(files);
     const { nodes, links, clusters, warnings: graphW } = buildGraph(raw);
     set({ nodes, links, clusters, warnings: [...scanW, ...graphW], rawContentCache, globalLayoutCache: null, dirHandle: null, storageMode: 'vault', zipDirty: false, scanProgress: { loaded: 0, total: 0, scanning: false } });
+  },
+
+  // ── syncFromGitHub — fetch vault files from GitHub and refresh graph ───────
+  syncFromGitHub: async () => {
+    if (!ghConfigured()) return;
+    try {
+      const ghFiles = await fetchVaultFiles();
+      if (!Object.keys(ghFiles).length) return;
+
+      // Merge: GitHub is source of truth, localStorage user content fills gaps
+      const userContent = getGlobalUserContent();
+      const merged = { ...userContent, ...ghFiles };
+
+      storage.setStorageMode('vault');
+      const { nodes: raw, warnings: scanW, rawContentCache } = storage.loadVaultFiles(merged);
+      const { nodes, links, clusters, warnings: graphW } = buildGraph(raw);
+      set({
+        nodes, links, clusters,
+        warnings: [...scanW, ...graphW],
+        rawContentCache,
+        globalLayoutCache: null,
+        dirHandle: null,
+        storageMode: 'vault',
+        zipDirty: false,
+      });
+    } catch (e) {
+      console.error('[syncFromGitHub]', e);
+      // Silent failure — keep using bundled/localStorage data
+    }
   },
 
   // ── loadZip ────────────────────────────────────────────────────────────────

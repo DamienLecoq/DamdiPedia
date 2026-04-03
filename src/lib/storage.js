@@ -17,6 +17,7 @@ import {
   isZipDirty as zipDirtyState,
 } from './zip.js';
 import { syncVaultFile, removeVaultFile } from './vaultLoader.js';
+import { isConfigured as ghConfigured, commitFile as ghCommit, deleteFile as ghDelete } from './github.js';
 
 // Internal state (set by graph_store when opening a folder or ZIP)
 let _dirHandle = null;
@@ -99,7 +100,15 @@ export async function writeNode(node) {
 
   if (_storageMode === 'zip' || _storageMode === 'vault') {
     writeNodeToZip(node);
-    if (_storageMode === 'vault') syncVaultFile(node._filename, serialized);
+    if (_storageMode === 'vault') {
+      syncVaultFile(node._filename, serialized);
+      // Async GitHub sync (fire-and-forget; errors are logged, not thrown)
+      if (ghConfigured()) {
+        ghCommit(node._filename, serialized).catch(e =>
+          console.error('[storage] GitHub commit failed:', e),
+        );
+      }
+    }
     return;
   }
 
@@ -118,7 +127,14 @@ export async function deleteNode(nodeId) {
 
   if (_storageMode === 'zip' || _storageMode === 'vault') {
     deleteNodeFromZip(nodeId);
-    if (_storageMode === 'vault') removeVaultFile(nodeId + '.md');
+    if (_storageMode === 'vault') {
+      removeVaultFile(nodeId + '.md');
+      if (ghConfigured()) {
+        ghDelete(nodeId + '.md').catch(e =>
+          console.error('[storage] GitHub delete failed:', e),
+        );
+      }
+    }
     return;
   }
 
