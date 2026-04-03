@@ -9,8 +9,11 @@ next_review: null
 ease_factor: 2.5
 interval: 1
 createdAt: '2026-04-03T14:17:39.582Z'
-updatedAt: '2026-04-03T14:44:29.531Z'
-relations: []
+updatedAt: '2026-04-03T14:45:59.388Z'
+relations:
+  - target: linux
+    type: runs_on
+    weight: 0.5
 resources:
   - type: documentation
     title: 'Doc officielle '
