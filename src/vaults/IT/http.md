@@ -4,8 +4,12 @@ label: HTTP
 category: network
 priority: high
 status: mastered
-createdAt: 2025-01-10T10:00:00Z
-updatedAt: 2025-01-10T10:00:00Z
+last_quiz_score: null
+next_review: null
+ease_factor: 2.5
+interval: 1
+createdAt: 'Fri Jan 10 2025 11:00:00 GMT+0100 (heure normale d’Europe centrale)'
+updatedAt: '2026-04-03T12:39:05.874Z'
 relations:
   - target: tcpip
     type: uses
@@ -13,9 +17,8 @@ relations:
 resources:
   - type: documentation
     title: Documentation HTTP - MDN
-    url: https://developer.mozilla.org/fr/docs/Web/HTTP
+    url: 'https://developer.mozilla.org/fr/docs/Web/HTTP'
 ---
-
 ## Qu'est-ce que HTTP ?
 
 HTTP est le protocole de couche application pour le transfert de données web.
