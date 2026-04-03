@@ -9,7 +9,7 @@ next_review: null
 ease_factor: 2.5
 interval: 1
 createdAt: '2026-04-03T14:17:39.582Z'
-updatedAt: '2026-04-03T14:42:23.098Z'
+updatedAt: '2026-04-03T14:44:29.531Z'
 relations: []
 resources:
   - type: documentation
@@ -18,6 +18,9 @@ resources:
   - type: video
     title: Chaine ytb
     url: 'https://www.youtube.com/@coreyms/featured'
+  - type: documentation
+    title: Wiki
+    url: 'https://fr.wikipedia.org/wiki/Python_(langage)'
 ---
 Python n'est plus seulement un langage de script ; c'est l'épine dorsale de l'ère algorithmique. En mars 2026, il domine le marché mondial avec une part de **15,63 %** (Indice TIOBE) et demeure la compétence la plus recherchée par les recruteurs (45,7 %).
 
