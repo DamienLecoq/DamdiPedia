@@ -1,148 +1,71 @@
 /**
- * github.js — GitHub Contents API client for vault sync.
+ * github.js — vault sync via Cloudflare Worker proxy.
  *
- * Reads/writes .md files in src/vaults/ of the configured repo.
- * Token is stored in localStorage; SHA cache kept in memory for efficient updates.
+ * The Worker holds the GitHub PAT server-side. Write/delete operations
+ * are authorized by the same VITE_EDIT_PASSWORD used for the UI lock.
+ * No token is needed on the client — works on every device out of the box.
  */
 
-const REPO_OWNER = 'DamienLecoq';
-const REPO_NAME  = 'DamdiPedia';
-const VAULT_PREFIX = 'src/vaults/';
-const DEFAULT_VAULT_DIR = 'IT';
-const BRANCH = 'main';
-
-const TOKEN_KEY = 'damdipedia:github-token';
+const PROXY_URL = import.meta.env.VITE_GITHUB_PROXY_URL || '';
 
 // In-memory SHA cache: { filename: sha }
 let _shaCache = {};
 
-// ── Token management ─────────────────────────────────────────────────────────
-
-export function getToken()  { return localStorage.getItem(TOKEN_KEY) || ''; }
-export function setToken(t) { localStorage.setItem(TOKEN_KEY, t.trim()); }
-export function removeToken() { localStorage.removeItem(TOKEN_KEY); _shaCache = {}; }
-export function isConfigured() { return !!getToken(); }
-
-// ── API helper ───────────────────────────────────────────────────────────────
-
-async function api(endpoint, options = {}) {
-  const token = getToken();
-  if (!token) throw new Error('No GitHub token configured');
-
-  const res = await fetch(
-    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}${endpoint}`,
-    {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github.v3+json',
-        ...options.headers,
-      },
-    },
-  );
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`GitHub API ${res.status}: ${body}`);
-  }
-  return res.json();
-}
-
-// ── UTF-8–safe base64 ────────────────────────────────────────────────────────
-
-function utf8ToBase64(str) {
-  const bytes = new TextEncoder().encode(str);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
+export function isConfigured() { return !!PROXY_URL; }
 
 // ── Fetch all vault .md files ────────────────────────────────────────────────
 
 export async function fetchVaultFiles() {
-  // Get full repo tree in one API call
-  const tree = await api(`/git/trees/${BRANCH}?recursive=1`);
+  if (!PROXY_URL) throw new Error('GitHub proxy not configured');
 
-  const vaultBlobs = tree.tree.filter(
-    f => f.type === 'blob' && f.path.startsWith(VAULT_PREFIX) && f.path.endsWith('.md'),
-  );
+  const res = await fetch(`${PROXY_URL}/vault`);
+  if (!res.ok) throw new Error(`Proxy error ${res.status}`);
 
-  _shaCache = {};
-  const contents = {};
-
-  // Fetch raw content in parallel (raw.githubusercontent.com — no rate-limit hit)
-  await Promise.all(
-    vaultBlobs.map(async (file) => {
-      try {
-        const res = await fetch(
-          `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${file.path}`,
-        );
-        if (!res.ok) return;
-        const text = await res.text();
-        const filename = file.path.split('/').pop();
-        contents[filename] = text;
-        _shaCache[filename] = file.sha;
-      } catch { /* skip individual file errors */ }
-    }),
-  );
-
-  return contents;
-}
-
-// ── Get SHA (from cache or API) ──────────────────────────────────────────────
-
-async function getFileSha(filename) {
-  if (_shaCache[filename]) return _shaCache[filename];
-
-  try {
-    const data = await api(`/contents/${VAULT_PREFIX}${DEFAULT_VAULT_DIR}/${filename}`);
-    _shaCache[filename] = data.sha;
-    return data.sha;
-  } catch {
-    return null;
-  }
+  const { files, shas } = await res.json();
+  _shaCache = shas || {};
+  return files;
 }
 
 // ── Commit a file (create or update) ─────────────────────────────────────────
 
 export async function commitFile(filename, content) {
-  const path = `${VAULT_PREFIX}${DEFAULT_VAULT_DIR}/${filename}`;
+  if (!PROXY_URL) return;
 
-  const body = {
-    message: `Update ${filename}`,
-    content: utf8ToBase64(content),
-    branch: BRANCH,
-  };
-
-  const sha = await getFileSha(filename);
-  if (sha) body.sha = sha;
-
-  const result = await api(`/contents/${path}`, {
+  const res = await fetch(`${PROXY_URL}/vault/${filename}`, {
     method: 'PUT',
-    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      content,
+      password: import.meta.env.VITE_EDIT_PASSWORD || '',
+    }),
   });
 
-  // Update cache with new SHA
-  _shaCache[filename] = result.content.sha;
-  return result;
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Proxy error ${res.status}`);
+  }
+
+  const { sha } = await res.json();
+  if (sha) _shaCache[filename] = sha;
 }
 
 // ── Delete a file ────────────────────────────────────────────────────────────
 
 export async function deleteFile(filename) {
-  const path = `${VAULT_PREFIX}${DEFAULT_VAULT_DIR}/${filename}`;
+  if (!PROXY_URL) return;
 
-  const sha = await getFileSha(filename);
-  if (!sha) throw new Error(`File ${filename} not found on GitHub`);
-
-  await api(`/contents/${path}`, {
+  const res = await fetch(`${PROXY_URL}/vault/${filename}`, {
     method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      message: `Delete ${filename}`,
-      sha,
-      branch: BRANCH,
+      password: import.meta.env.VITE_EDIT_PASSWORD || '',
     }),
   });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Proxy error ${res.status}`);
+  }
 
   delete _shaCache[filename];
 }

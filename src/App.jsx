@@ -6,7 +6,7 @@ import { useAiStore } from './stores/aiStore.js';
 import { useSingleTabGuard } from './hooks/useSingleTabGuard.js';
 import { useBeforeUnload } from './hooks/useBeforeUnload.js';
 import { useIsMobile } from './hooks/useIsMobile.js';
-import { getToken, setToken as saveGhToken, removeToken, isConfigured as ghConfigured } from './lib/github.js';
+import { isConfigured as ghConfigured } from './lib/github.js';
 import GraphView from './components/GraphView.jsx';
 import ScanLoader from './components/ScanLoader.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
@@ -79,69 +79,8 @@ function AuthModal({ onClose }) {
   );
 }
 
-// ── GitHub settings modal ─────────────────────────────────────────────────
-function GitHubModal({ onClose }) {
-  const [token, setToken] = useState(getToken());
-  const [status, setStatus] = useState(null); // null | 'ok' | 'err'
-
-  const handleSave = async () => {
-    if (!token.trim()) { removeToken(); onClose(); return; }
-    saveGhToken(token);
-    setStatus(null);
-    try {
-      await useGraphStore.getState().syncFromGitHub();
-      setStatus('ok');
-      setTimeout(onClose, 800);
-    } catch {
-      setStatus('err');
-    }
-  };
-
-  const handleDisconnect = () => {
-    removeToken();
-    setToken('');
-    setStatus(null);
-  };
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-      <div style={{
-        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-        padding: '1.5rem', maxWidth: 420, width: '90%', boxShadow: 'var(--glow-violet)',
-      }}>
-        <h3 style={{ marginBottom: '0.5rem', color: 'var(--text)', fontSize: '1rem' }}>GitHub Sync</h3>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: '1rem', lineHeight: 1.5 }}>
-          Entrez un <strong>Personal Access Token</strong> GitHub avec la permission
-          <code style={{ background: 'var(--surface2)', padding: '0.1rem 0.3rem', borderRadius: 3, fontSize: '0.78rem', marginLeft: 3 }}>Contents: Read and write</code> pour
-          synchroniser vos notes entre appareils.
-        </p>
-        <input
-          type="password"
-          value={token}
-          onChange={e => { setToken(e.target.value); setStatus(null); }}
-          onKeyDown={e => e.key === 'Enter' && handleSave()}
-          placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-          autoFocus
-          style={{ width: '100%', marginBottom: '0.5rem', fontFamily: 'monospace', fontSize: '0.82rem' }}
-        />
-        {status === 'ok' && <p style={{ color: 'var(--success)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Synchronisation OK</p>}
-        {status === 'err' && <p style={{ color: 'var(--danger)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Erreur de connexion. Token invalide ?</p>}
-        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
-          {getToken() && (
-            <button className="btn-danger" onClick={handleDisconnect} style={{ marginRight: 'auto', fontSize: '0.78rem' }}>
-              Deconnecter
-            </button>
-          )}
-          <button className="btn-secondary" onClick={onClose}>Annuler</button>
-          <button className="btn-primary" onClick={handleSave}>Enregistrer</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Top nav ───────────────────────────────────────────────────────────────────
-function TopNav({ onShowAuth, onShowGitHub }) {
+function TopNav({ onShowAuth }) {
   const nodes        = useGraphStore(s => s.nodes);
   const warnings     = useGraphStore(s => s.warnings);
   const currentView  = useUiStore(s => s.currentView);
@@ -218,18 +157,19 @@ function TopNav({ onShowAuth, onShowGitHub }) {
         </button>
       )}
 
-      <button
-        onClick={onShowGitHub}
-        style={{
-          background: 'none', border: `1px solid ${ghConfigured() ? 'var(--success)' : 'var(--border)'}`,
-          borderRadius: 6, padding: '0.2rem 0.5rem', fontSize: '0.9rem',
-          color: ghConfigured() ? 'var(--success)' : 'var(--text-muted)',
-          cursor: 'pointer',
-        }}
-        title={ghConfigured() ? 'GitHub Sync actif' : 'Configurer GitHub Sync'}
-      >
-        {ghConfigured() ? '⟳' : '⚙'}
-      </button>
+      {ghConfigured() && (
+        <button
+          onClick={() => useGraphStore.getState().syncFromGitHub()}
+          style={{
+            background: 'none', border: '1px solid var(--success)',
+            borderRadius: 6, padding: '0.2rem 0.5rem', fontSize: '0.9rem',
+            color: 'var(--success)', cursor: 'pointer',
+          }}
+          title="Sync GitHub"
+        >
+          ⟳
+        </button>
+      )}
 
       {authRequired && (
         <button
@@ -309,12 +249,10 @@ export default function App() {
   const [singleTabWarning, setSingleTabWarning] = useState(false);
   const [quizBlockModal, setQuizBlockModal] = useState(false);
   const [pendingUrl, setPendingUrl] = useState(null);
-  const [showGitHubModal, setShowGitHubModal] = useState(false);
-
   useSingleTabGuard();
   useBeforeUnload(zipDirty, editorDirty);
 
-  // Sync from GitHub on mount (if token configured)
+  // Sync from GitHub on mount (if proxy configured)
   useEffect(() => {
     useGraphStore.getState().syncFromGitHub();
   }, []);
@@ -358,10 +296,7 @@ export default function App() {
           </div>
         )}
 
-        <TopNav
-          onShowAuth={() => closeAuthModal() || useUiStore.getState().openAuthModal()}
-          onShowGitHub={() => setShowGitHubModal(true)}
-        />
+        <TopNav onShowAuth={() => closeAuthModal() || useUiStore.getState().openAuthModal()} />
 
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           <MainContent />
@@ -370,7 +305,6 @@ export default function App() {
         <ToastContainer />
 
         {showAuthModal && <AuthModal onClose={closeAuthModal} />}
-        {showGitHubModal && <GitHubModal onClose={() => setShowGitHubModal(false)} />}
 
         {quizBlockModal && (
           <QuizBlockModal
