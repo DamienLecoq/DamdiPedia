@@ -1,0 +1,719 @@
+{
+  "meta": {
+    "document_purpose": "Complete specification for an AI assistant to fully understand, design and implement the IT Knowledge Graph application",
+    "version": "2.6.0",
+    "changelog": [
+      "v2.0.0–v2.5.0: See previous versions for full history",
+      "v2.6.0: last_quiz_score format defined, NodeTargetSelector useEffect sync, refreshWarnings() implemented, useBlocker replaced with hashchange guard for HashRouter, getNeighborIds() and getNode() fully defined, requestIdleCallback described honestly (delays start, still blocks), global view 150-node selection strategy defined (most connected), storage.js renameNode() added, ZIP scan progress specified separately from folder mode, dependency versions pinned, private fields stripped before AI payload, Phase 1a zipDirty clarification note, selectNode() quiz guard via getState() pattern shown, color null omitted from frontmatter, rename failure simulation method documented, getNode() defined"
+    ],
+    "how_to_use": "Read entirely before writing any code. Respect phase order. When in doubt, refer to constraints."
+  },
+
+  "project": {
+    "name": "IT Knowledge Graph",
+    "tagline": "A graph-based second brain for IT learning, powered by local files and AI",
+    "type": "Single-page web application (SPA)",
+    "target_user": "A single developer/learner",
+    "core_philosophy": "The app orchestrates files the user owns. If the app disappears, the knowledge remains.",
+    "known_limitations": [
+      "Single tab usage only — concurrent tabs with the same folder may cause write conflicts.",
+      "File System Access API supported in Chrome and Edge only. Firefox/Safari → ZIP mode.",
+      "AI features require internet. All other features work offline.",
+      "No real-time collaboration — single-user by design.",
+      "useBlocker (React Router) is unreliable with HashRouter for the browser back button. The quiz navigation guard uses hashchange events instead — see quiz_navigation_guard."
+    ]
+  },
+
+  "fundamental_architecture_decision": {
+    "principle": "Markdown files on disk ARE the database. The app reads and writes them via the File System Access API.",
+    "file_structure": {
+      "example_file": {
+        "filename": "docker.md",
+        "content_example": "---\nid: docker\nlabel: Docker\ncategory: devops\npriority: high\nstatus: learning\nlast_quiz_score: null\nnext_review: null\nease_factor: 2.5\ninterval: 1\ncreatedAt: 2025-01-10T10:00:00Z\nupdatedAt: 2025-01-10T10:00:00Z\nrelations:\n  - target: kubernetes\n    type: depends_on\n    weight: 0.9\n  - target: linux\n    type: uses\n    weight: 0.7\nresources:\n  - type: documentation\n    title: Docker Official Docs\n    url: https://docs.docker.com\n---\n\n## What is Docker?\nDocker is a containerization platform.\n\n## Key Concepts\n- **Image**: Read-only template\n- **Container**: Running instance\n- **Dockerfile**: Build script\n- **Registry**: Image storage\n",
+        "color_field_note": "color is OMITTED from frontmatter when null (the default). Only write color if user explicitly sets a custom value. matter.stringify omits undefined fields — set color to undefined (not null) in the data object before serializing."
+      }
+    }
+  },
+
+  "dependencies": {
+    "install_command": "npm install react@^18 react-dom@^18 react-router-dom@^6.20 react-force-graph-2d@^1.25 d3@^7 gray-matter@^4 react-markdown@^9 remark-gfm@^4 idb-keyval@^6 jszip@^3 fuse.js@^7 zustand@^4",
+    "packages": [
+      { "name": "react", "version": "^18" },
+      { "name": "react-dom", "version": "^18" },
+      { "name": "react-router-dom", "version": "^6.20" },
+      { "name": "react-force-graph-2d", "version": "^1.25", "note": "Pin minor version — API has had breaking changes between majors" },
+      { "name": "d3", "version": "^7", "note": "EXPLICIT dependency. react-force-graph-2d does not expose d3-force for direct import." },
+      { "name": "gray-matter", "version": "^4" },
+      { "name": "react-markdown", "version": "^9" },
+      { "name": "remark-gfm", "version": "^4" },
+      { "name": "idb-keyval", "version": "^6" },
+      { "name": "jszip", "version": "^3" },
+      { "name": "fuse.js", "version": "^7" },
+      { "name": "zustand", "version": "^4" }
+    ],
+    "dev": [
+      { "name": "vite", "version": "^5" },
+      { "name": "@vitejs/plugin-react", "version": "^4" },
+      { "name": "gh-pages", "version": "^6" }
+    ],
+    "pinning_rationale": "All versions are pinned to a known-good major. Do not use 'latest' for any package — silent breaking changes will occur over time."
+  },
+
+  "tech_stack": {
+    "frontend": {
+      "framework": "React 18",
+      "build_tool": "Vite 5",
+      "language": "JavaScript (TypeScript optional)",
+      "routing": {
+        "library": "React Router v6",
+        "mode": "HashRouter",
+        "reason": "Required for GitHub Pages static hosting"
+      },
+      "react_strict_mode": {
+        "instruction": "DISABLE StrictMode — do not wrap App in React.StrictMode",
+        "reason": "react-force-graph-2d double-initializes its physics simulation under StrictMode",
+        "error_boundary": {
+          "requirement": "MANDATORY — wrap GraphView in GraphErrorBoundary",
+          "implementation": "class GraphErrorBoundary extends React.Component {\n  constructor(props) { super(props); this.state = { hasError: false, error: null }; }\n  static getDerivedStateFromError(e) { return { hasError: true, error: e }; }\n  render() {\n    if (this.state.hasError) return (\n      <div className='graph-error'>\n        <p>Graph error: {this.state.error?.message}</p>\n        <button onClick={() => this.setState({ hasError: false, error: null })}>Retry</button>\n      </div>\n    );\n    return this.props.children;\n  }\n}"
+        }
+      }
+    },
+    "file_system": {
+      "api": "File System Access API (window.showDirectoryPicker)",
+      "browser_detection": "const fsaSupported = 'showDirectoryPicker' in window;",
+      "extension_filter": "name.toLowerCase().endsWith('.md')",
+      "handle_persistence": {
+        "rule": "FileSystemHandle is NOT JSON-serializable. Use IndexedDB via idb-keyval.",
+        "implementation": "import { set, get } from 'idb-keyval';\nawait set('dirHandle', dirHandle);\n\nconst saved = await get('dirHandle');\nif (saved) {\n  const perm = await saved.queryPermission({ mode: 'readwrite' });\n  if (perm === 'granted') setDirHandle(saved);\n  else {\n    const req = await saved.requestPermission({ mode: 'readwrite' });\n    if (req === 'granted') setDirHandle(saved); else promptUserToReopen();\n  }\n}"
+      },
+      "fallback_storage": {
+        "library": "JSZip@^3",
+        "memory_limit": {
+          "threshold_mb": 20,
+          "check": "const totalBytes = Object.values(zip.files).reduce((a, f) => a + (f._data?.uncompressedSize || 0), 0);\nif (totalBytes > 20 * 1024 * 1024) showMemoryWarning((totalBytes/1024/1024).toFixed(1));"
+        },
+        "dirty_guard": "useBeforeUnload(zipDirty, editorDirty) — fires on BOTH states in any storage mode"
+      },
+      "parsing": {
+        "frontmatter": "gray-matter@^4",
+        "markdown_render": "react-markdown@^9 + remark-gfm@^4",
+        "color_serialization": {
+          "rule": "When building the data object for matter.stringify(), set color to undefined (not null) if the user has not set a custom color. matter.stringify omits undefined fields, preventing 'color: null' from appearing in every file.",
+          "implementation": "const frontmatterData = {\n  ...nodeFields,\n  color: node.color || undefined, // undefined → omitted from YAML output\n  _handle: undefined,\n  _filename: undefined,\n  markdown_body: undefined\n};\nconst serialized = matter.stringify(node.markdown_body || '', frontmatterData);"
+        },
+        "yaml_validation": {
+          "function": "verifyYamlRoundTrip(original, serialized)",
+          "checks": ["id", "label", "category", "relations array length"],
+          "implementation": "export const verifyYamlRoundTrip = (original, serialized) => {\n  const r = matter(serialized).data;\n  if (r.id !== original.id) throw new Error(`id mismatch: '${r.id}'`);\n  if (r.label !== original.label) throw new Error(`label mismatch — may contain YAML special chars`);\n  if (r.category !== original.category) throw new Error(`category mismatch`);\n  const ol = (original.relations || []).length, rl = (r.relations || []).length;\n  if (ol !== rl) throw new Error(`relations count: expected ${ol}, got ${rl}`);\n};"
+        },
+        "folder_scan": {
+          "two_pass": {
+            "note": "dirHandle.entries() returns a NEW independent AsyncIterableIterator on each call. Calling it twice for two passes is correct and safe — do not cache the first iterator.",
+            "implementation": "// Pass 1: count\nlet total = 0;\nfor await (const [name] of dirHandle.entries()) {\n  if (name.toLowerCase().endsWith('.md')) total++;\n}\n\n// Pass 2: parse\nlet loaded = 0;\nconst nodes = [], warnings = [], rawContentCache = new Map();\nfor await (const [name, handle] of dirHandle.entries()) {\n  if (!name.toLowerCase().endsWith('.md')) continue;\n  const text = await (await handle.getFile()).text();\n  try {\n    const { data, content } = matter(text);\n    nodes.push(normalizeNode({ ...data, markdown_body: content, _handle: handle, _filename: name }));\n  } catch (e) {\n    rawContentCache.set(name, text);\n    warnings.push({ type: 'parse_error', file: name, detail: e.message });\n  }\n  updateScanProgress(++loaded, total);\n}"
+          }
+        },
+        "zip_scan": {
+          "note": "JSZip loads the entire archive into memory at once. There is no streaming. Count is available immediately after loadAsync — no two-pass needed.",
+          "implementation": "const zip = await JSZip.loadAsync(file);\nconst mdEntries = Object.entries(zip.files)\n  .filter(([name, f]) => !f.dir && name.toLowerCase().endsWith('.md'));\nconst total = mdEntries.length;\nlet loaded = 0;\nconst nodes = [], warnings = [], rawContentCache = new Map();\nfor (const [name, zipFile] of mdEntries) {\n  const text = await zipFile.async('string');\n  try {\n    const { data, content } = matter(text);\n    nodes.push(normalizeNode({ ...data, markdown_body: content, _handle: null, _filename: name }));\n  } catch (e) {\n    rawContentCache.set(name, text);\n    warnings.push({ type: 'parse_error', file: name, detail: e.message });\n  }\n  updateScanProgress(++loaded, total);\n}"
+        }
+      }
+    },
+    "search": {
+      "library": "Fuse.js@^7",
+      "rebuild_rule": "Rebuild index in useEffect watching nodes array. An outdated index omits newly created nodes.",
+      "implementation": "// search.js\nlet fuse = null;\nexport const buildFuseIndex = (nodes) => {\n  fuse = new Fuse(nodes, {\n    keys: [{ name: 'label', weight: 0.6 }, { name: 'category', weight: 0.2 }, { name: 'markdown_body', weight: 0.2 }],\n    threshold: 0.3, includeScore: true, minMatchCharLength: 2\n  });\n};\nexport const search = (q) => fuse?.search(q) || [];\n\n// useSearch.js\nuseEffect(() => { buildFuseIndex(nodes); }, [nodes]);"
+    },
+    "ai_integration": {
+      "model": "const model = import.meta.env.VITE_AI_MODEL || 'claude-sonnet-4-20250514';",
+      "max_tokens": "const maxTokens = parseInt(import.meta.env.VITE_AI_MAX_TOKENS || '2048');",
+      "proxy_url_missing_ui": {
+        "location": "Persistent banner at TOP of detail panel AI section, REPLACING both AI buttons",
+        "message": "AI features not configured. Set VITE_AI_PROXY_URL in .env.local and restart.",
+        "check": "const aiConfigured = !!import.meta.env.VITE_AI_PROXY_URL;"
+      },
+      "network_error_handling": {
+        "implementation": "export const callAI = async (userMessage, systemPrompt) => {\n  if (!import.meta.env.VITE_AI_PROXY_URL) throw new Error('AI_NOT_CONFIGURED');\n  if (!navigator.onLine) throw new Error('OFFLINE');\n  let response;\n  try {\n    response = await fetch(import.meta.env.VITE_AI_PROXY_URL, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({\n        model: import.meta.env.VITE_AI_MODEL || 'claude-sonnet-4-20250514',\n        max_tokens: parseInt(import.meta.env.VITE_AI_MAX_TOKENS || '2048'),\n        system: systemPrompt,\n        messages: [{ role: 'user', content: userMessage }]\n      })\n    });\n  } catch (e) {\n    if (e instanceof TypeError) throw new Error('NETWORK_ERROR');\n    throw e;\n  }\n  if (!response.ok) {\n    const err = await response.json().catch(() => ({}));\n    throw new Error(err?.error?.message || `HTTP ${response.status}`);\n  }\n  return (await response.json()).content[0].text;\n};\n\nconst AI_ERRORS = {\n  AI_NOT_CONFIGURED: 'AI not configured — set VITE_AI_PROXY_URL in .env.local.',\n  OFFLINE: 'No internet connection.',\n  NETWORK_ERROR: 'Network error — check your connection.'\n};\nexport const getAIErrorMessage = (err) => AI_ERRORS[err.message] || 'AI error: ' + err.message;"
+      }
+    },
+    "deployment": {
+      "platform": "GitHub Pages",
+      "vite_config": "export default defineConfig({ base: '/your-repo-name/', plugins: [react()] });"
+    }
+  },
+
+  "slugify": {
+    "file": "src/lib/slugify.js",
+    "implementation": "export function slugify(label) {\n  return label\n    .toLowerCase().normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[^a-z0-9\\s-]/g, '')\n    .trim().replace(/[\\s_]+/g, '-')\n    .replace(/-+/g, '-').replace(/^-|-$/g, '');\n}",
+    "examples": [
+      { "input": "TCP/IP", "output": "tcpip" },
+      { "input": "C++ Basics", "output": "c-basics" },
+      { "input": "Node.js", "output": "nodejs" },
+      { "input": "Docker", "output": "docker" }
+    ],
+    "collision_handling": "Append numeric suffix: nodejs-2. Warn user.",
+    "rename_operation": {
+      "handle_refresh": "After deleting oldId.md, get a fresh handle: const freshHandle = await dirHandle.getFileHandle(newId + '.md'); then set node._handle = freshHandle; node._filename = newId + '.md'; before calling updateNodeInMemory().",
+      "failure_simulation_for_testing": "To test rollback: temporarily wrap dirHandle.getFileHandle in a mock that throws after N calls. Example in tests: let callCount = 0; const origGet = dirHandle.getFileHandle.bind(dirHandle); dirHandle.getFileHandle = async (...args) => { if (++callCount > 2) throw new Error('Simulated failure'); return origGet(...args); };",
+      "steps": [
+        "1. newId = slugify(newLabel). Abort if collision.",
+        "2. Snapshot content of ALL files to be modified.",
+        "3. Write newId.md with updated id, label, updatedAt.",
+        "4. Rewrite each dependent file: replace oldId → newId in relations.",
+        "5. If ALL succeed: delete oldId.md. Refresh _handle (see handle_refresh above).",
+        "6. If ANY fail: delete newId.md if created, restore snapshots, show error.",
+        "7. updateNodeInMemory() with refreshed node. Never refreshGraph()."
+      ]
+    }
+  },
+
+  "normalize_node": {
+    "file": "src/lib/graph.js",
+    "rule": "Call on EVERY parsed node. Never use raw frontmatter directly.",
+    "implementation": "export function normalizeNode(raw) {\n  return {\n    id: raw.id || slugify(raw.label || 'unnamed'),\n    label: raw.label || raw.id || 'Unnamed',\n    category: raw.category || 'concept',\n    color: raw.color || null,\n    priority: ['low','medium','high'].includes(raw.priority) ? raw.priority : 'medium',\n    status: ['learning','to_review','mastered'].includes(raw.status) ? raw.status : 'learning',\n    last_quiz_score: raw.last_quiz_score || null,\n    next_review: raw.next_review || null,\n    ease_factor: (typeof raw.ease_factor === 'number' && !isNaN(raw.ease_factor)) ? raw.ease_factor : 2.5,\n    interval: (typeof raw.interval === 'number' && !isNaN(raw.interval) && raw.interval > 0) ? raw.interval : 1,\n    createdAt: raw.createdAt || new Date().toISOString(),\n    updatedAt: raw.updatedAt || new Date().toISOString(),\n    relations: Array.isArray(raw.relations) ? raw.relations : [],\n    resources: Array.isArray(raw.resources) ? raw.resources : [],\n    markdown_body: raw.markdown_body || '',\n    _handle: raw._handle || null,\n    _filename: raw._filename || ((raw.id || 'unknown') + '.md')\n  };\n}"
+  },
+
+  "graph_functions": {
+    "file": "src/lib/graph.js",
+    "description": "All functions exported from graph.js. Used by graph_store and ai.js.",
+
+    "getNode": {
+      "signature": "getNode(nodeId: string, nodes: Node[]): Node | undefined",
+      "implementation": "export const getNode = (nodeId, nodes) => nodes.find(n => n.id === nodeId);",
+      "note": "Always pass the current nodes array from graph_store. Do not use a closure over stale state."
+    },
+
+    "getNeighborIds": {
+      "signature": "getNeighborIds(nodeId: string, depth: number, links: Link[]): Set<string>",
+      "description": "BFS traversal returning all neighbor IDs within the given depth. Treats links as undirected.",
+      "implementation": "export function getNeighborIds(nodeId, depth, links) {\n  const visited = new Set([nodeId]);\n  let frontier = new Set([nodeId]);\n  for (let d = 0; d < depth; d++) {\n    const next = new Set();\n    links.forEach(l => {\n      if (frontier.has(l.source) && !visited.has(l.target)) next.add(l.target);\n      if (frontier.has(l.target) && !visited.has(l.source)) next.add(l.source);\n    });\n    next.forEach(id => visited.add(id));\n    frontier = next;\n  }\n  visited.delete(nodeId); // exclude the main node itself\n  return visited;\n}"
+    },
+
+    "buildGraph": {
+      "description": "Build full in-memory graph from parsed nodes. Detects slug collisions.",
+      "slug_collision_detection": "const seenIds = new Map();\nfor (const node of parsedNodes) {\n  if (seenIds.has(node.id)) {\n    warnings.push({ type: 'slug_collision', file: node._filename,\n      detail: `ID '${node.id}' conflicts with '${seenIds.get(node.id)}'` });\n  } else {\n    seenIds.set(node.id, node._filename);\n  }\n}"
+    },
+
+    "buildLinks": "Build link array from nodes.relations. Skip dangling (target not in node id set).",
+
+    "buildClusters": "Group nodes by category. Each cluster: { category, node_ids, color }.",
+
+    "refreshWarnings": {
+      "description": "Recompute dangling_relation warnings from current in-memory nodes. Preserves parse_error and slug_collision warnings (those come from disk, not memory).",
+      "implementation": "export function refreshWarnings(nodes, existingWarnings) {\n  const validIds = new Set(nodes.map(n => n.id));\n  const dangling = [];\n  nodes.forEach(node => {\n    node.relations.forEach(rel => {\n      if (!validIds.has(rel.target)) {\n        dangling.push({\n          type: 'dangling_relation',\n          file: node._filename,\n          detail: `Broken link to '${rel.target}' (type: ${rel.type})`\n        });\n      }\n    });\n  });\n  const preserved = existingWarnings.filter(\n    w => w.type === 'parse_error' || w.type === 'slug_collision'\n  );\n  return [...preserved, ...dangling];\n}",
+      "usage": "Called after: fixAllDanglingRelations(), fixOneDanglingRelation(), deleteNode(). Pass current nodes and current warnings."
+    },
+
+    "computeStaticForceLayout": {
+      "description": "Pre-compute static node positions using a fixed number of D3 force simulation ticks.",
+      "honesty_note": "requestIdleCallback delays the START of computation so the browser can paint a loading spinner first. However, the 300 D3 ticks themselves run synchronously and WILL block the main thread for ~50–300ms depending on node count. This is acceptable for < 100 nodes. For 100–150 nodes, reduce to 150 ticks to limit freeze duration. A Web Worker would be needed for true non-blocking behavior but is out of scope.",
+      "implementation": "export function computeStaticForceLayout(nodes, links, onComplete) {\n  const simNodes = nodes.map(n => ({ id: n.id }));\n  const simLinks = links\n    .filter(l => simNodes.some(n => n.id === l.source) && simNodes.some(n => n.id === l.target))\n    .map(l => ({ source: l.source, target: l.target }));\n\n  const TICKS = nodes.length > 100 ? 150 : 300;\n\n  const run = () => {\n    const sim = d3.forceSimulation(simNodes)\n      .force('link', d3.forceLink(simLinks).id(d => d.id).distance(80))\n      .force('charge', d3.forceManyBody().strength(-120))\n      .force('center', d3.forceCenter(0, 0))\n      .force('collision', d3.forceCollide(20))\n      .stop();\n    for (let i = 0; i < TICKS; i++) sim.tick();\n    const positions = new Map();\n    simNodes.forEach(n => positions.set(n.id, { x: n.x || 0, y: n.y || 0 }));\n    onComplete(positions);\n  };\n\n  if ('requestIdleCallback' in window) {\n    requestIdleCallback(run, { timeout: 2000 });\n  } else {\n    setTimeout(run, 0);\n  }\n}"
+    },
+
+    "selectTopNodes": {
+      "description": "When global view has more than 150 nodes, select WHICH 150 to show.",
+      "strategy": "Show the 150 most connected nodes (highest relation count). If a category filter is active, apply the filter first then take top 150 from the filtered set.",
+      "implementation": "export function selectTopNodes(nodes, links, maxCount = 150, categoryFilter = null) {\n  let candidates = categoryFilter\n    ? nodes.filter(n => n.category === categoryFilter)\n    : nodes;\n  if (candidates.length <= maxCount) return candidates;\n  // Count connections per node\n  const connectionCount = new Map(candidates.map(n => [n.id, 0]));\n  links.forEach(l => {\n    if (connectionCount.has(l.source)) connectionCount.set(l.source, connectionCount.get(l.source) + 1);\n    if (connectionCount.has(l.target)) connectionCount.set(l.target, connectionCount.get(l.target) + 1);\n  });\n  return candidates\n    .sort((a, b) => (connectionCount.get(b.id) || 0) - (connectionCount.get(a.id) || 0))\n    .slice(0, maxCount);\n}"
+    }
+  },
+
+  "storage_interface": {
+    "file": "src/lib/storage.js",
+    "description": "Unified interface routing to fs.js (folder) or zip.js (ZIP). ALL components use only this file.",
+    "created_in_phase": "1a (folder mode only). Updated in Phase 1b to add ZIP routing.",
+    "phase_1b_update_task": "In Phase 1b, EXPLICITLY update storage.js to import zip.js and route based on storageMode. This is a required task — not optional.",
+    "interface": {
+      "readAllNodes()": "Returns { nodes, warnings, rawContentCache }. Routes to folder or ZIP scan.",
+      "writeNode(node)": "verifyYamlRoundTrip() then write. Routes to fs.js or zip.js.",
+      "deleteNode(id)": "Delete file. Routes to fs.js or zip.js.",
+      "renameNode(oldId, newId, newLabel, allNodes, dirHandle)": {
+        "description": "Orchestrates the full rename: snapshot, write new, rewrite dependents, delete old, refresh handle.",
+        "note": "renameNode() is in storage.js (not directly in graph_store) because it involves multi-file coordination that belongs in the storage layer. graph_store.renameNode() calls storage.renameNode() then updateNodeInMemory() with the result.",
+        "returns": "{ renamedNode, updatedDependents } — the renamed node (with fresh _handle) and list of dependent nodes updated"
+      },
+      "getMode()": "Returns 'folder' | 'zip'",
+      "isZipDirty()": "Returns boolean",
+      "exportZip()": "ZIP mode only — triggers download"
+    }
+  },
+
+  "node_color": {
+    "rule": "Computed at render time. NEVER auto-written to file. Only write if user explicitly sets custom color.",
+    "render": "export const getNodeColor = (node) => node.color || CATEGORY_COLOR_MAP[node.category] || CATEGORY_COLOR_MAP.default;",
+    "map": { "devops": "#4ECDC4", "web": "#45B7D1", "network": "#96CEB4", "security": "#FF6B6B", "database": "#FFEAA7", "language": "#DDA0DD", "concept": "#98D8C8", "default": "#A0A0A0" }
+  },
+
+  "data_model": {
+    "node_frontmatter_schema": {
+      "id": "string — always from slugify(label)",
+      "label": "string required",
+      "category": "string required",
+      "color": "string | omitted — only present if user set a custom color explicitly",
+      "priority": "enum: low | medium | high — default medium",
+      "status": "enum: learning | to_review | mastered — default learning",
+      "last_quiz_score": "string | null — format: '4/5' (correctCount/totalQuestions). See quiz_state.score_to_last_quiz_score.",
+      "next_review": "ISO date string | null",
+      "ease_factor": "number — default 2.5",
+      "interval": "number — SM-2 interval in days, default 1",
+      "createdAt": "ISO date string",
+      "updatedAt": "ISO date string — updated on every save",
+      "relations": "array of { target: string, type: string, weight: number 0–1 }. Types are plain strings — NOT a closed enum.",
+      "resources": "array of { type: enum, title: string, url: string }"
+    },
+    "in_memory_graph": {
+      "nodes": "Node[] — all via normalizeNode()",
+      "links": "{ source: id, target: id, type: string, weight: number }[]",
+      "clusters": "{ category: string, node_ids: string[], color: string }[]",
+      "warnings": "{ type: 'dangling_relation'|'parse_error'|'slug_collision', file: string, detail: string }[]",
+      "rawContentCache": "Map<filename, rawString> — populated for parse-failed files only",
+      "globalLayoutCache": "{ positions: Map<id,{x,y}>, computedAt: number } | null"
+    }
+  },
+
+  "graph_operations": {
+    "incremental_update": {
+      "rule": "After any single-node write, use updateNodeInMemory / addNodeInMemory / removeNodeFromMemory. Call refreshWarnings() after operations that affect relations. NEVER call refreshGraph() for single writes.",
+      "refreshGraph_usage": "Only on: initial load, folder/ZIP re-open, explicit user 'Reload' action."
+    }
+  },
+
+  "views": {
+    "graph_view": {
+      "library": "react-force-graph-2d@^1.25",
+      "error_boundary": "MANDATORY GraphErrorBoundary wrapper",
+      "rendering_modes": {
+        "cluster_mode": { "default": true, "max_nodes": 40 },
+        "global_view_mode": {
+          "max_nodes": 150,
+          "node_selection": "Use selectTopNodes(nodes, links, 150, activeCategory). Shows most-connected nodes. Show warning if truncated.",
+          "layout": "computeStaticForceLayout() via requestIdleCallback. Show spinner during computation. Cache result in globalLayoutCache. Invalidate cache on any node mutation.",
+          "react_force_graph_props": "d3AlphaDecay={1} d3VelocityDecay={1} cooldownTicks={0} with fx/fy set from cache on each node"
+        },
+        "expanded_mode": { "max_nodes": 40, "activated_by": "Cluster click or category filter" }
+      },
+      "interactions": {
+        "click_node": "Check quizState before selectNode() — see quiz_navigation_guard.same_page_guard",
+        "hover_node": "Highlight + dim neighbors",
+        "right_click": "Context menu: Edit | Rename | Delete",
+        "drag": "Reposition (not persisted)",
+        "zoom_pan": "Mouse wheel + drag background"
+      }
+    },
+
+    "list_view": {
+      "columns": ["Label", "Category", "Priority", "Status", "Relations count", "Next review"],
+      "row_click": "Open detail panel (respects quiz guard)"
+    },
+
+    "dashboard_view": {
+      "sections": ["due_for_review (next_review <= today)", "recently_added (last 5)", "mastery_by_category (progress bars)", "stats_bar", "graph_health_badge", "quick_add_button"]
+    },
+
+    "graph_health_panel": {
+      "sections": {
+        "dangling_relations": {
+          "data": "warnings where type === 'dangling_relation'",
+          "fix_one": "Remove relation from file. writeNode() → updateNodeInMemory() → refreshWarnings().",
+          "fix_all": {
+            "strategy": "Best-effort. Never abort on partial failure.",
+            "implementation": "const fixAllDanglingRelations = async () => {\n  const validIds = new Set(nodes.map(n => n.id));\n  const affectedIds = [...new Set(\n    warnings.filter(w => w.type === 'dangling_relation').map(w => w.file.replace('.md',''))\n  )];\n  const results = { ok: [], fail: [] };\n  for (const nodeId of affectedIds) {\n    const node = nodes.find(n => n.id === nodeId);\n    if (!node) continue;\n    const cleaned = { ...node, relations: node.relations.filter(r => validIds.has(r.target)) };\n    try {\n      await storage.writeNode(cleaned);\n      updateNodeInMemory(cleaned);\n      results.ok.push(nodeId);\n    } catch (e) {\n      results.fail.push(nodeId);\n    }\n  }\n  const newWarnings = refreshWarnings(nodes, warnings);\n  setWarnings(newWarnings);\n  showToast(`Fixed: ${results.ok.length}. Failed: ${results.fail.length}`);\n};"
+          }
+        },
+        "parse_errors": {
+          "data": "warnings where type === 'parse_error'",
+          "show_raw_content": "Read from rawContentCache.get(filename). If missing: 'Re-open folder to re-scan.'"
+        },
+        "slug_collisions": {
+          "data": "warnings where type === 'slug_collision'",
+          "action": "Rename button → opens editor"
+        }
+      },
+      "empty_state": "Green checkmark: 'Your knowledge graph is healthy.'"
+    },
+
+    "editor_view": {
+      "form_fields": {
+        "label": "Text input. Live slug preview below: 'Will be saved as: docker.md'",
+        "category": "Dropdown with color swatch",
+        "color": "Optional color picker. Cleared → undefined → omitted from frontmatter.",
+        "priority": "Radio: Low | Medium | High",
+        "status": "Radio: Learning | To Review | Mastered",
+        "relations": {
+          "target_selector": {
+            "component": "NodeTargetSelector",
+            "value_sync": {
+              "rule": "Use useEffect to synchronize inputText when the external value prop changes. Without this, the displayed label stays stale when a relation entry is edited from outside.",
+              "implementation": "const NodeTargetSelector = ({ value, onChange, nodes }) => {\n  const labelFromId = (id) => nodes.find(n => n.id === id)?.label || id || '';\n  const [inputText, setInputText] = useState(labelFromId(value));\n  const [showDropdown, setShowDropdown] = useState(false);\n\n  // Sync when external value changes (e.g. parent re-renders with different relation)\n  useEffect(() => {\n    setInputText(labelFromId(value));\n  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps\n\n  const suggestions = inputText.length >= 1\n    ? nodes.filter(n =>\n        n.label.toLowerCase().includes(inputText.toLowerCase()) ||\n        n.id.includes(inputText.toLowerCase())\n      ).slice(0, 8)\n    : [];\n  const isResolved = nodes.some(n => n.id === value);\n\n  const handleSelect = (node) => {\n    setInputText(node.label);\n    setShowDropdown(false);\n    onChange(node.id); // commit on explicit selection\n  };\n\n  const handleBlur = () => {\n    setShowDropdown(false);\n    const match = nodes.find(n => n.label.toLowerCase() === inputText.toLowerCase());\n    onChange(match ? match.id : slugify(inputText)); // commit on blur\n  };\n\n  return (\n    <div>\n      <input\n        value={inputText}\n        onChange={e => { setInputText(e.target.value); setShowDropdown(true); }}\n        onBlur={handleBlur}\n        onFocus={() => setShowDropdown(true)}\n      />\n      {!isResolved && value && <span title='Node does not exist yet'>⚠️</span>}\n      {showDropdown && suggestions.map(n => (\n        <div key={n.id} onMouseDown={() => handleSelect(n)}>{n.label}</div>\n      ))}\n    </div>\n  );\n};"
+            },
+            "on_change_trigger": "onChange fires ONLY on: dropdown item selection (onMouseDown) OR input blur. NOT on every keystroke."
+          },
+          "type_field": "Autocomplete with known defaults. Accepts any string.",
+          "weight_field": "Slider 0.0–1.0 step 0.1"
+        },
+        "markdown_body": "Textarea + toolbar. Char counter. Warning at 10,000 chars."
+      },
+      "dirty_tracking": "editorDirty = true on any field change. False on successful save or confirmed cancel.",
+      "save_behavior": {
+        "pre_save": "verifyYamlRoundTrip(). color serialized as undefined if null.",
+        "write": "storage.writeNode() → updateNodeInMemory(). Never refreshGraph().",
+        "rename_trigger": "If new label produces different slug → storage.renameNode() flow."
+      }
+    }
+  },
+
+  "scan_loading": {
+    "folder_mode": "Two-pass: count then parse. Live counter: 'Loading X / Y'.",
+    "zip_mode": "Count available after loadAsync. Single pass with counter.",
+    "ui": ["Full-area spinner overlay", "Counter: 'Loading nodes... X / Y'", "Post-load toast if warnings > 0"]
+  },
+
+  "single_tab_guard": {
+    "file": "src/hooks/useSingleTabGuard.js",
+    "implementation": "export function useSingleTabGuard() {\n  useEffect(() => {\n    if (!('BroadcastChannel' in window)) return;\n    const channel = new BroadcastChannel('it-knowledge-graph-tab');\n    // Assign handler BEFORE posting — a fast PONG could arrive before handler is set\n    channel.onmessage = (e) => {\n      if (e.data.type === 'PING') channel.postMessage({ type: 'PONG' });\n      if (e.data.type === 'PONG') showSingleTabWarning();\n    };\n    channel.postMessage({ type: 'PING' });\n    return () => channel.close();\n  }, []);\n}"
+  },
+
+  "ai_features": {
+    "phase_gate": "Phase 4 MUST NOT start before ALL Phase 3 verifications pass.",
+
+    "quiz_state": {
+      "interface": "interface QuizState {\n  nodeId: string;\n  questions: Question[];\n  currentIndex: number;\n  answers: (number | null)[];\n  completed: boolean;\n  score: number | null; // correctCount / questions.length, set when completed\n}\ninterface Question {\n  question: string;\n  options: [string, string, string, string];\n  correct_answer: number; // 0–3\n  explanation: string;\n}",
+      "score_formula": {
+        "rule": "score = correctCount / questions.length — range [0.0, 1.0]",
+        "implementation": "// In submitAnswer, when last question is answered:\nconst correctCount = answers.filter((a, i) => a !== null && a === questions[i].correct_answer).length;\nconst score = correctCount / questions.length;\n// Set quizState: { ...quizState, completed: true, score }"
+      },
+      "score_to_last_quiz_score": {
+        "rule": "last_quiz_score is stored as a human-readable string '4/5', NOT as a float '0.8'.",
+        "implementation": "// In finishQuiz(), before writeNode():\nconst correctCount = Math.round(quizState.score * quizState.questions.length);\nconst last_quiz_score = `${correctCount}/${quizState.questions.length}`;\n// e.g. score=0.8, questions=5 → '4/5'"
+      },
+      "answer_finality": "Answers are FINAL on first click. Disable all option buttons for the current question immediately after any option is clicked.",
+      "transitions": {
+        "generateQuiz": "{ nodeId, questions, currentIndex: 0, answers: new Array(N).fill(null), completed: false, score: null }",
+        "submitAnswer": "answers[currentIndex] = answerIndex. If last: compute score, completed = true.",
+        "finishQuiz": "sm2() → writeNode() with all 6 SM-2 fields + last_quiz_score → updateNodeInMemory() → resetQuiz()",
+        "resetQuiz": "quizState = null"
+      }
+    },
+
+    "quiz_navigation_guard": {
+      "problem": "useBlocker from React Router v6 has documented unreliable behavior with HashRouter — specifically the browser back button does not always trigger the block. useBlocker is designed for BrowserRouter.",
+      "solution": {
+        "route_changes": {
+          "approach": "Listen to window hashchange event and block it manually when quiz is in progress.",
+          "implementation": "// In App.jsx or a top-level layout component:\nuseEffect(() => {\n  const handleHashChange = (e) => {\n    const { quizState } = useAiStore.getState();\n    if (quizState && !quizState.completed) {\n      // Prevent the hash change\n      e.preventDefault();\n      // Restore the old hash\n      window.history.pushState(null, '', e.oldURL.split(window.location.origin)[1]);\n      // Show confirmation modal\n      setQuizBlockModal(true);\n    }\n  };\n  window.addEventListener('hashchange', handleHashChange);\n  return () => window.removeEventListener('hashchange', handleHashChange);\n}, []);",
+          "modal": "QuizBlockModal: 'Quiz in progress (Q X/Y). Leave and lose progress?' → [Continue Quiz] [Abandon Quiz]",
+          "on_abandon": "resetQuiz(). Proceed with intended navigation."
+        },
+        "same_page_guard": {
+          "description": "When user clicks a different node in the graph while quiz panel is open.",
+          "pattern": "Check quizState via useAiStore.getState() inside the component handler, before calling selectNode().",
+          "implementation": "// In GraphView.jsx, node click handler:\nconst handleNodeClick = (node) => {\n  const { quizState } = useAiStore.getState();\n  if (quizState && !quizState.completed) {\n    setPendingNodeId(node.id); // store intended destination\n    setShowQuizInterruptModal(true); // show modal\n    return;\n  }\n  selectNode(node.id); // proceed normally\n};\n\n// Modal onConfirm:\nresetQuiz();\nselectNode(pendingNodeId);\nsetShowQuizInterruptModal(false);\n\n// getState() pattern:\n// CORRECT: const { quizState } = useAiStore.getState();\n// WRONG: import { useAiStore } as hook in store action files (circular dep)"
+        }
+      }
+    },
+
+    "context_engine": {
+      "function": "buildAIContext(nodeId, depth, nodes, links)",
+      "implementation": "export const buildAIContext = (nodeId, depth, nodes, links) => {\n  const mainNode = getNode(nodeId, nodes);\n  const neighborIds = getNeighborIds(nodeId, depth, links);\n\n  const neighborsWithWeight = [...neighborIds].map(nId => {\n    const node = getNode(nId, nodes);\n    const directLink = links.find(\n      l => (l.source === nodeId && l.target === nId) ||\n           (l.source === nId && l.target === nodeId)\n    );\n    return { node, weight: directLink?.weight || 0 };\n  });\n\n  const topNeighbors = neighborsWithWeight\n    .sort((a, b) => b.weight - a.weight)\n    .slice(0, 10)\n    .map(({ node }) => {\n      // Strip internal fields before sending to AI\n      const { _handle, _filename, ...cleanNode } = node;\n      return {\n        ...cleanNode,\n        markdown_body: cleanNode.markdown_body?.slice(0, 200) || ''\n      };\n    });\n\n  // Main node: full content, internal fields stripped\n  const { _handle, _filename, ...cleanMain } = mainNode;\n\n  return { main_node: cleanMain, neighbors: topNeighbors };\n};"
+    },
+
+    "prompt_templates": {
+      "note": "ES6 template literals in actual code. Wrap in backticks.",
+      "summary": {
+        "system": "You are a technical educator. Generate structured pedagogical explanations in Markdown.",
+        "user": "Explain '${node.label}' (${node.category}).\n\nMy notes: ${node.markdown_body}\n\nRelated: ${neighbors.map(n => `- ${n.label}: ${n.markdown_body}`).join('\\n')}\n\n## Definition\n## Key Concepts\n## How it relates to ${neighbors.map(n => n.label).join(', ')}\n## Practical Use Cases\n## Common Pitfalls"
+      },
+      "quiz": {
+        "system": "You are a technical quiz generator. Return ONLY raw JSON arrays. No markdown, no code fences.",
+        "user": "Generate exactly ${count} MCQ about '${node.label}'. Difficulty: ${difficulty}.\n\nContext: ${node.markdown_body.slice(0, 500)}\nRelated: ${neighbors.map(n => `${n.label}: ${n.markdown_body}`).join(' | ')}\n\nRaw JSON only:\n[{\"question\":\"...\",\"options\":[\"A\",\"B\",\"C\",\"D\"],\"correct_answer\":0,\"explanation\":\"...\"}]"
+      }
+    },
+
+    "features": {
+      "summary": {
+        "disabled_when": "!aiConfigured",
+        "caching": "summaryCache per nodeId per session"
+      },
+      "quiz": {
+        "disabled_when": "!aiConfigured OR markdown_body.trim().length < 100",
+        "min_content_message": "Add more content (min 100 chars) before generating a quiz",
+        "response_parsing": "export const parseQuizResponse = (raw) => {\n  const cleaned = raw.replace(/^```json\\s*/i,'').replace(/^```\\s*/i,'').replace(/```\\s*$/i,'').trim();\n  let parsed;\n  try { parsed = JSON.parse(cleaned); } catch(e) { throw new Error('Invalid JSON: '+e.message); }\n  if (!Array.isArray(parsed)) throw new Error('Not an array');\n  parsed.forEach((q, i) => {\n    if (typeof q.question !== 'string' || !q.question.trim()) throw new Error(`Q${i}: missing question`);\n    if (!Array.isArray(q.options) || q.options.length !== 4) throw new Error(`Q${i}: need 4 options`);\n    if (typeof q.correct_answer !== 'number' || q.correct_answer < 0 || q.correct_answer > 3)\n      throw new Error(`Q${i}: correct_answer must be 0–3`);\n    if (typeof q.explanation !== 'string') throw new Error(`Q${i}: missing explanation`);\n  });\n  return parsed;\n};",
+        "sm2_fields_written": ["status", "last_quiz_score (as '4/5')", "ease_factor", "interval", "next_review", "updatedAt"]
+      }
+    }
+  },
+
+  "sm2_algorithm": {
+    "file": "src/lib/sm2.js",
+    "implementation": "export function sm2(score, easeFactor, interval) {\n  const ef = (typeof easeFactor === 'number' && !isNaN(easeFactor)) ? easeFactor : 2.5;\n  const iv = (typeof interval === 'number' && !isNaN(interval) && interval > 0) ? interval : 1;\n  const q = Math.round(score * 5);\n  let newEF = Math.max(1.3, parseFloat((ef + 0.1 - (5-q)*(0.08+(5-q)*0.02)).toFixed(2)));\n  const newInterval = q < 3 ? 1 : iv === 1 ? 6 : Math.round(iv * newEF);\n  const next = new Date();\n  next.setDate(next.getDate() + newInterval);\n  return { newEF, newInterval, nextReview: next.toISOString().split('T')[0] };\n}",
+    "status_rules": { "< 0.6": "learning", "0.6–0.8": "to_review", ">= 0.8": "mastered" }
+  },
+
+  "cloudflare_worker": {
+    "worker_code": "export default {\n  async fetch(request, env) {\n    const allowed = ['https://yourusername.github.io','http://localhost:5173','http://localhost:4173'];\n    if (request.method === 'OPTIONS') return new Response(null, { headers: {\n      'Access-Control-Allow-Origin': '*',\n      'Access-Control-Allow-Methods': 'POST, OPTIONS',\n      'Access-Control-Allow-Headers': 'Content-Type'\n    }});\n    const origin = request.headers.get('Origin') || '';\n    if (!allowed.some(o => origin.startsWith(o))) return new Response('Forbidden', { status: 403 });\n    if (env.AI_LIMITER) {\n      const { success } = await env.AI_LIMITER.limit({ key: request.headers.get('CF-Connecting-IP') || 'x' });\n      if (!success) return new Response('Rate limit exceeded', { status: 429 });\n    }\n    if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });\n    const body = await request.json();\n    const res = await fetch('https://api.anthropic.com/v1/messages', {\n      method: 'POST',\n      headers: { 'x-api-key': env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },\n      body: JSON.stringify(body)\n    });\n    return new Response(await res.text(), {\n      status: res.status,\n      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': origin }\n    });\n  }\n}",
+    "setup": ["1. cloudflare.com → Workers → Create Worker", "2. Paste code. Update allowed origins.", "3. Settings → Variables → ANTHROPIC_KEY secret", "4. (Optional) Rate limiting in wrangler.toml", "5. Deploy. Copy URL → VITE_AI_PROXY_URL"],
+    "localhost_note": "localhost entries allow dev access. Keep Worker URL private or remove localhost entries after development."
+  },
+
+  "application_state": {
+    "library": "Zustand@^4",
+    "cross_store_pattern": "Use StoreX.getState() inside actions or event handlers to read state from another store. Never import store hooks inside store files.",
+    "stores": {
+      "graph_store": {
+        "state": ["nodes","links","clusters","warnings","rawContentCache","globalLayoutCache","selectedNodeId","dirHandle","storageMode","zipDirty"],
+        "actions": ["loadDirectory()","loadZip()","exportZip()","refreshGraph()","updateNodeInMemory()","addNodeInMemory()","removeNodeFromMemory()","setWarnings()","selectNode()","createNode()","updateNode()","renameNode()","deleteNode()","fixDanglingRelation()","fixAllDanglingRelations()","setGlobalLayoutCache()"]
+      },
+      "ui_store": {
+        "state": ["currentView","graphRenderMode","aiPanelOpen","contextDepth","activeFilters","editorDirty","computingLayout"],
+        "actions": ["setView()","setGraphRenderMode()","toggleAIPanel()","setDepth()","setFilters()","setEditorDirty()","setComputingLayout()"],
+        "removed": "navigateSafely() — replaced by hashchange guard + same-page inline checks"
+      },
+      "ai_store": {
+        "state": ["summaryCache","quizState","loading","error"],
+        "actions": ["generateSummary()","generateQuiz()","submitAnswer()","finishQuiz()","resetQuiz()"]
+      }
+    }
+  },
+
+  "development_phases": {
+    "rule": "Complete each phase fully before starting the next.",
+
+    "phase_1a_folder_core": {
+      "goal": "App opens a folder and displays a working graph. Core lib in place.",
+      "tasks": [
+        "Run npm install command from dependencies section.",
+        "Setup React + Vite. Disable StrictMode with comment in main.jsx.",
+        "Set base in vite.config.js.",
+        "Create slugify.js.",
+        "Create graph.js: normalizeNode(), getNode(), getNeighborIds(), buildGraph() with collision detection, buildLinks(), buildClusters(), refreshWarnings(), computeStaticForceLayout(), selectTopNodes().",
+        "Create fs.js: two-pass folder scan with independent entries() calls, normalizeNode(), rawContentCache, IndexedDB handle persistence.",
+        "Create storage.js: folder mode only at this stage. writeNode() includes verifyYamlRoundTrip() and color→undefined serialization.",
+        "Create Zustand stores.",
+        "ScanLoader component with live counter.",
+        "GraphErrorBoundary.",
+        "react-force-graph-2d: cluster mode default, global mode with computeStaticForceLayout + spinner + cache.",
+        "useSingleTabGuard: handler before postMessage.",
+        "useBeforeUnload(zipDirty, editorDirty): zipDirty will be false in Phase 1a — this is expected and correct. The hook is created now so editorDirty protection works immediately.",
+        "5 sample .md files using slugify(). Verify 'TCP/IP' → 'tcpip'."
+      ],
+      "done_when": "Folder opens, scan shows counter, graph renders, global view layout is readable, GraphErrorBoundary works, storage.js ready."
+    },
+
+    "phase_1b_zip_mode": {
+      "goal": "ZIP mode fully functional. storage.js updated.",
+      "tasks": [
+        "Create zip.js: loadZip() with JSZip single-pass scan + memory check, exportZip().",
+        "UPDATE storage.js: import zip.js, route all operations by storageMode, add renameNode() orchestration, add loadZip(), exportZip(), isZipDirty().",
+        "ZIP badge + non-dismissible banner.",
+        "Welcome screen: two buttons if FSA supported, one if not.",
+        "Verify beforeunload fires for both zipDirty and editorDirty."
+      ],
+      "done_when": "ZIP mode works. storage.js routes correctly. Memory warning shows. beforeunload covers both dirty states."
+    },
+
+    "phase_2_interaction": {
+      "goal": "User can explore and read",
+      "tasks": [
+        "Node click handler checks quizState via useAiStore.getState() (quiz guard for Phase 4).",
+        "Detail panel with Markdown render.",
+        "Hover highlight/dim.",
+        "Cluster expand.",
+        "Relations list (skip dangling).",
+        "Fuse.js search — useEffect rebuilds on nodes change.",
+        "Top nav.",
+        "hashchange quiz guard listener registered in App.jsx (modal shown only when quiz active)."
+      ],
+      "done_when": "Click, hover, search, read work. New nodes appear in search. hashchange listener in place."
+    },
+
+    "phase_3_editing": {
+      "goal": "Full CRUD. Completely stable before Phase 4.",
+      "tasks": [
+        "Editor: all fields, slug preview, Markdown preview, char counter.",
+        "NodeTargetSelector: useEffect value sync, onChange on blur/select only, ⚠️ for unresolved targets.",
+        "editorDirty tracking.",
+        "color serialized as undefined (not null) before matter.stringify.",
+        "verifyYamlRoundTrip() before every write.",
+        "writeNode() → updateNodeInMemory(). refreshWarnings() after relation-affecting ops.",
+        "Create node with collision detection.",
+        "storage.renameNode() wired to graph_store.renameNode(). _handle refreshed after success.",
+        "Delete with best-effort cascade.",
+        "Fix All dangling: best-effort + toast with counts.",
+        "ZIP export button.",
+        "List view, Dashboard, Graph Health panel."
+      ],
+      "phase_gate_verification": [
+        "Create 'TCP/IP' → id='tcpip', filename='tcpip.md'",
+        "Create 'C++ Basics' → id='c-basics'",
+        "Create two nodes with same slug → collision suffix, Graph Health shows slug_collision",
+        "Edit node label 'HTTP: Protocol' → save succeeds or clear YAML error shown",
+        "Edit node → updatedAt changes, graph updates without full re-parse",
+        "color left empty → color field absent from written .md file",
+        "color set by user → color field written to .md file",
+        "Create node → immediately searchable (Fuse rebuilt)",
+        "Rename 'Docker' → 'Docker Engine': old file gone, new file created, relations updated, subsequent edit succeeds (handle refreshed)",
+        "Rename failure simulation (mock getFileHandle to fail after 2 calls) → rollback, no corrupt state",
+        "Delete with relations → Graph Health shows remaining dangling links",
+        "Fix All dangling → toast shows counts, Graph Health refreshed",
+        "Load .MD uppercase file → loaded",
+        "Load .md missing 'category' → normalizeNode fills default, no crash",
+        "Load .md with YAML error → Graph Health parse_errors shows it, Show raw content works",
+        "Add relation to non-existent node → ⚠️ in editor, Graph Health shows after save",
+        "Edit form → close tab without saving → beforeunload fires",
+        "ZIP: export → reimport → all fields intact including interval and ease_factor",
+        "Open NodeTargetSelector for a relation, change parent value externally → inputText updates",
+        "Switch to Global View (>5 nodes) → spinner shows, layout computes, result readable, no crash",
+        "Mutate node → globalLayoutCache = null → next Global View recomputes"
+      ],
+      "done_when": "ALL verifications pass. Zero known bugs."
+    },
+
+    "phase_4_ai": {
+      "goal": "AI summary and quiz end-to-end",
+      "prerequisite": "ALL Phase 3 verifications pass",
+      "tasks": [
+        "Cloudflare Worker deployed with origin check + rate limiting.",
+        "Env vars wired.",
+        "VITE_AI_PROXY_URL missing → banner replaces AI buttons in detail panel.",
+        "callAI(): navigator.onLine check + TypeError catch. getAIErrorMessage() for user messages.",
+        "buildAIContext(): uses getNode() and getNeighborIds() with links join for weight. Strips _handle/_filename from payload.",
+        "generateSummary: ES6 template prompt, cache, loading state.",
+        "generateQuiz: ES6 template prompt, parseQuizResponse() with schema validation.",
+        "Disable 'Take Quiz' if markdown_body < 100 chars.",
+        "QuizState per interface. Answers final on click (options disabled immediately).",
+        "hashchange guard: blocks navigation when quiz active. Same-page guard: check useAiStore.getState().quizState in GraphView node click.",
+        "finishQuiz(): score = correctCount/total. last_quiz_score = '4/5' format. sm2() with defensive defaults. Write all 6 fields via writeNode() + updateNodeInMemory().",
+        "Depth slider (1–3), difficulty selector."
+      ],
+      "done_when": "Summary and quiz work. hashchange guard blocks navigation. Answers final. SM-2 writes all fields including last_quiz_score as '4/5'. Offline errors show specific messages."
+    },
+
+    "phase_5_polish": {
+      "goal": "Production-ready",
+      "tasks": [
+        "Complete dashboard: review queue, progress bars, stats.",
+        "Toast for all async ops.",
+        "Keyboard shortcuts: Esc (close panel), Ctrl+K (search focus).",
+        "Performance: 100+ nodes in all three graph modes.",
+        "README: browser support, npm install, folder structure, slugify examples, env vars, Cloudflare setup, Vite base, GitHub Pages, single-tab limitation, known limitations."
+      ]
+    }
+  },
+
+  "constraints_and_rules": {
+    "mandatory": [
+      "NEVER store FileSystemHandle in sessionStorage/localStorage — idb-keyval only",
+      "NEVER hardcode AI model — env var with fallback",
+      "NEVER call Anthropic API directly — Worker only",
+      "NEVER start Phase 4 before ALL Phase 3 verifications pass",
+      "NEVER hardcode relation types as closed enum",
+      "NEVER send > 10 neighbors or > 200 chars/neighbor to AI",
+      "NEVER write .md without verifyYamlRoundTrip()",
+      "NEVER JSON.parse AI quiz output without parseQuizResponse()",
+      "NEVER call refreshGraph() after single write — use incremental updates",
+      "NEVER use fs.js or zip.js directly in components — storage.js only",
+      "NEVER show VITE_AI_PROXY_URL missing as silent failure — banner in detail panel",
+      "NEVER post BroadcastChannel PING before assigning onmessage",
+      "NEVER import store hooks inside store files — use getState() cross-store",
+      "NEVER fire onChange in NodeTargetSelector on every keystroke — only on select/blur",
+      "NEVER use navigateSafely() — hashchange guard + inline checks instead",
+      "NEVER pass _weight to sort neighbors — join with links array",
+      "NEVER include _handle/_filename in AI context payload — strip before sending",
+      "NEVER write color: null to frontmatter — use undefined so gray-matter omits it",
+      "NEVER write last_quiz_score as float — always '4/5' format string",
+      "ALWAYS call normalizeNode() on every parsed node",
+      "ALWAYS detect slug collisions in buildGraph()",
+      "ALWAYS use slugify() for IDs — never inline",
+      "ALWAYS normalize file extensions to lowercase",
+      "ALWAYS wrap computeStaticForceLayout in requestIdleCallback/setTimeout",
+      "ALWAYS use selectTopNodes() to select which 150 nodes to show in global view",
+      "ALWAYS cache globalLayoutCache — invalidate on node mutation",
+      "ALWAYS wrap GraphView in GraphErrorBoundary",
+      "ALWAYS disable React StrictMode — comment in main.jsx why",
+      "ALWAYS set Vite base to repo name",
+      "ALWAYS show non-dismissible orange banner in ZIP mode",
+      "ALWAYS fire beforeunload on zipDirty OR editorDirty",
+      "ALWAYS show scan counter (folder: two-pass, ZIP: single-pass)",
+      "ALWAYS update updatedAt on every save",
+      "ALWAYS rebuild Fuse index on nodes change (useEffect)",
+      "ALWAYS store rawContentCache for parse-failed files",
+      "ALWAYS catch TypeError in callAI() for captive-portal/restricted networks",
+      "ALWAYS refresh _handle after rename",
+      "ALWAYS update storage.js in Phase 1b (not optional)",
+      "ALWAYS define score = correctCount/questions.length before sm2()",
+      "ALWAYS disable quiz options immediately on first click",
+      "ALWAYS use useEffect to sync NodeTargetSelector inputText with external value",
+      "ALWAYS call refreshWarnings() after any operation that changes relations",
+      "ALWAYS use getNode(id, nodes) and getNeighborIds(id, depth, links) from graph.js",
+      "ALWAYS pin all package versions — no 'latest'"
+    ],
+    "performance_rules": [
+      "Max 40 nodes: cluster/expanded",
+      "Max 150 nodes: global (selectTopNodes for selection)",
+      "Global: d3AlphaDecay=1 d3VelocityDecay=1 cooldownTicks=0 fx/fy from cache",
+      "300 D3 ticks (150 if nodes > 100), wrapped in requestIdleCallback",
+      "Debounce search 300ms",
+      "Cache AI per node per session",
+      "Warn if ZIP > 20MB"
+    ]
+  },
+
+  "sample_data": {
+    "critical_note": "IDs are exact slugify() outputs. 'TCP/IP' → 'tcpip'. color field OMITTED (not null) in all samples.",
+    "nodes": [
+      {
+        "filename": "docker.md",
+        "frontmatter": { "id": "docker", "label": "Docker", "category": "devops", "priority": "high", "status": "learning", "ease_factor": 2.5, "interval": 1, "relations": [{ "target": "kubernetes", "type": "depends_on", "weight": 0.9 }, { "target": "linux", "type": "uses", "weight": 0.7 }], "resources": [{ "type": "documentation", "title": "Docker Official Docs", "url": "https://docs.docker.com" }] },
+        "body": "## What is Docker?\nDocker is a containerization platform that packages apps with their dependencies.\n\n## Key Concepts\n- **Image**: Read-only template\n- **Container**: Running instance\n- **Dockerfile**: Build script\n- **Registry**: Image storage\n\n## Common Commands\n```bash\ndocker build -t my-app .\ndocker run -p 3000:3000 my-app\ndocker ps\n```"
+      },
+      {
+        "filename": "kubernetes.md",
+        "frontmatter": { "id": "kubernetes", "label": "Kubernetes", "category": "devops", "priority": "high", "status": "learning", "ease_factor": 2.5, "interval": 1, "relations": [{ "target": "docker", "type": "uses", "weight": 0.9 }, { "target": "linux", "type": "uses", "weight": 0.6 }] },
+        "body": "## What is Kubernetes?\nK8s is an open-source container orchestration platform.\n\n## Key Concepts\n- **Pod**: Smallest deployable unit\n- **Node**: Worker machine\n- **Cluster**: Set of nodes\n- **Deployment**: Manages pod replicas\n- **Service**: Stable network endpoint"
+      },
+      {
+        "filename": "linux.md",
+        "frontmatter": { "id": "linux", "label": "Linux", "category": "concept", "priority": "medium", "status": "mastered", "ease_factor": 2.8, "interval": 21, "relations": [{ "target": "docker", "type": "related", "weight": 0.7 }] },
+        "body": "## What is Linux?\nLinux is an open-source Unix-like OS kernel by Linus Torvalds.\n\n## Key Concepts\n- Kernel, Shell, Filesystem, Processes, Permissions, Package managers"
+      },
+      {
+        "filename": "tcpip.md",
+        "note": "slugify('TCP/IP') === 'tcpip'. id and filename MUST be 'tcpip'.",
+        "frontmatter": { "id": "tcpip", "label": "TCP/IP", "category": "network", "priority": "medium", "status": "to_review", "ease_factor": 2.3, "interval": 4, "relations": [{ "target": "http", "type": "depends_on", "weight": 0.8 }] },
+        "body": "## What is TCP/IP?\nTCP/IP is the foundational protocol suite of the internet.\n\n## Layers\n- Application, Transport, Internet, Network Access\n\n## Protocols\n- **TCP**: Reliable ordered delivery\n- **UDP**: Fast, no guarantee\n- **IP**: Addressing and routing"
+      },
+      {
+        "filename": "http.md",
+        "frontmatter": { "id": "http", "label": "HTTP", "category": "network", "priority": "high", "status": "mastered", "ease_factor": 2.9, "interval": 30, "relations": [{ "target": "tcpip", "type": "uses", "weight": 0.8 }] },
+        "body": "## What is HTTP?\nHTTP is the application-layer protocol for web data transfer.\n\n## Key Concepts\n- **Methods**: GET POST PUT PATCH DELETE\n- **Status codes**: 2xx 3xx 4xx 5xx\n- **Headers**: Content-Type Authorization Cache-Control\n- **HTTPS**: HTTP over TLS"
+      }
+    ]
+  },
+
+  "project_structure": {
+    "src/": {
+      "components/": {
+        "graph/": ["GraphView.jsx", "GraphErrorBoundary.jsx", "GraphControls.jsx"],
+        "panel/": ["DetailPanel.jsx", "AISummary.jsx", "QuizPanel.jsx"],
+        "views/": ["ListView.jsx", "DashboardView.jsx", "EditorView.jsx", "GraphHealthPanel.jsx"],
+        "ui/": ["SearchBar.jsx", "TopNav.jsx", "Toast.jsx", "Modal.jsx", "StorageModeBanner.jsx", "ScanLoader.jsx", "NodeTargetSelector.jsx"]
+      },
+      "store/": ["graphStore.js", "uiStore.js", "aiStore.js"],
+      "lib/": {
+        "slugify.js": "slugify()",
+        "graph.js": "normalizeNode(), getNode(), getNeighborIds(), buildGraph(), buildLinks(), buildClusters(), refreshWarnings(), computeStaticForceLayout(), selectTopNodes()",
+        "fs.js": "Two-pass folder scan. idb-keyval persistence. Extension normalization.",
+        "zip.js": "loadZip() with memory check. exportZip().",
+        "storage.js": "Unified interface: readAllNodes, writeNode, deleteNode, renameNode, getMode, isZipDirty, exportZip. All components use ONLY this file.",
+        "ai.js": "callAI(), getAIErrorMessage(), buildAIContext(), parseQuizResponse()",
+        "sm2.js": "sm2()",
+        "search.js": "buildFuseIndex(), search()"
+      },
+      "hooks/": ["useGraph.js", "useAI.js", "useSearch.js", "useStorage.js", "useBeforeUnload.js", "useSingleTabGuard.js"],
+      "App.jsx": "HashRouter root. hashchange quiz guard listener.",
+      "main.jsx": "StrictMode omitted — comment explains react-force-graph-2d reason."
+    },
+    "vite.config.js": "base: '/your-repo-name/'",
+    ".env.local": "VITE_AI_PROXY_URL=\nVITE_AI_MODEL=claude-sonnet-4-20250514\nVITE_AI_MAX_TOKENS=2048",
+    ".env.example": "VITE_AI_PROXY_URL=https://your-worker.workers.dev\nVITE_AI_MODEL=claude-sonnet-4-20250514\nVITE_AI_MAX_TOKENS=2048",
+    "README.md": "Browser support | npm install | slugify examples | env vars | Cloudflare setup | Vite base | GitHub Pages | single-tab warning | known limitations"
+  }
+}
