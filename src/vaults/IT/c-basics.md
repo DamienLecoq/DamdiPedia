@@ -4,16 +4,17 @@ label: C++ Bases
 category: language
 priority: medium
 status: learning
-createdAt: 2025-01-12T10:00:00Z
-updatedAt: 2025-01-12T10:00:00Z
-relations:
-  - target: linux
-    type: compiles_on
-    weight: 0.4
+last_quiz_score: null
+next_review: null
+ease_factor: 2.5
+interval: 1
+createdAt: 'Sun Jan 12 2025 11:00:00 GMT+0100 (heure normale d’Europe centrale)'
+updatedAt: 'Sun Jan 12 2025 11:00:00 GMT+0100 (heure normale d’Europe centrale)'
+relations: []
 resources:
   - type: documentation
     title: cppreference.com
-    url: https://en.cppreference.com
+    url: 'https://en.cppreference.com'
 ---
 
 ## Qu'est-ce que C++ ?
