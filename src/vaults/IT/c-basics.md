@@ -3,13 +3,13 @@ id: c-basics
 label: C++ Bases
 category: language
 priority: medium
-status: learning
-last_quiz_score: null
-next_review: null
-ease_factor: 2.5
-interval: 1
+status: to_review
+last_quiz_score: 3/5
+next_review: '2026-04-11'
+ease_factor: 2.36
+interval: 6
 createdAt: 'Sun Jan 12 2025 11:00:00 GMT+0100 (heure normale d’Europe centrale)'
-updatedAt: 'Sun Jan 12 2025 11:00:00 GMT+0100 (heure normale d’Europe centrale)'
+updatedAt: '2026-04-05T07:59:56.158Z'
 relations: []
 resources:
   - type: documentation
