@@ -20,11 +20,12 @@ function OptionButton({ label, text, index, correctIndex, chosenIndex, disabled,
       onClick={() => !disabled && onClick(index)}
       disabled={disabled}
       style={{
-        width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem',
-        marginBottom: 6, borderRadius: 6, fontSize: '0.83rem',
-        background: bg, border: `1px solid ${border}`, color,
+        width: '100%', textAlign: 'left', padding: '0.55rem 0.85rem',
+        marginBottom: 7, borderRadius: 12, fontSize: '0.83rem',
+        background: bg, border: `1px solid ${border}`, borderTopColor: 'rgba(255,255,255,0.08)', color,
         cursor: disabled ? 'not-allowed' : 'pointer',
-        transition: 'background 0.1s',
+        transition: 'all 0.15s',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
       }}
     >
       <span style={{ fontWeight: 600, marginRight: 8 }}>{label}.</span>{text}
@@ -57,10 +58,12 @@ function ScoreScreen({ quizState, onFinish, onDiscard, loading }) {
           const isCorrect = chosen === q.correct_answer;
           return (
             <div key={qi} style={{
-              marginBottom: '0.6rem', padding: '0.5rem 0.65rem',
-              background: 'var(--bg)', borderRadius: 6,
-              border: `1px solid ${isCorrect ? 'rgba(0,229,160,0.3)' : 'rgba(255,82,82,0.3)'}`,
+              marginBottom: '0.6rem', padding: '0.55rem 0.75rem',
+              background: isCorrect ? 'rgba(52,211,153,0.04)' : 'rgba(248,113,113,0.04)',
+              borderRadius: 12,
+              border: `1px solid ${isCorrect ? 'rgba(52,211,153,0.25)' : 'rgba(248,113,113,0.25)'}`,
               fontSize: '0.78rem',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
             }}>
               <div style={{ fontWeight: 500, marginBottom: 4, color: 'var(--text)' }}>
                 {isCorrect ? '✓' : '✗'} Q{qi + 1} : {q.question}
@@ -153,12 +156,12 @@ export default function QuizPanel({ onClose }) {
         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
           Question {currentIndex + 1} / {questions.length}
         </span>
-        <div style={{ height: 3, flex: 1, marginLeft: 12, background: 'var(--border)', borderRadius: 2 }}>
+        <div style={{ height: 4, flex: 1, marginLeft: 12, background: 'rgba(255,255,255,0.06)', borderRadius: 999, border: '1px solid rgba(255,255,255,0.04)' }}>
           <div style={{
-            height: '100%', borderRadius: 2, background: 'var(--accent)',
+            height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, var(--accent), var(--accent2))',
             width: `${((currentIndex + (isAnswered ? 1 : 0)) / questions.length) * 100}%`,
-            transition: 'width 0.2s',
-            boxShadow: 'var(--glow-violet)',
+            transition: 'width 0.3s ease',
+            boxShadow: '0 0 8px rgba(167,139,250,0.3)',
           }} />
         </div>
       </div>
@@ -188,10 +191,12 @@ export default function QuizPanel({ onClose }) {
       {isAnswered && (
         <div style={{ marginTop: '0.5rem' }}>
           <div style={{
-            background: 'var(--bg)', border: '1px solid var(--border)',
-            borderRadius: 6, padding: '0.5rem 0.65rem',
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+            borderTopColor: 'rgba(255,255,255,0.1)',
+            borderRadius: 10, padding: '0.55rem 0.75rem',
             fontSize: '0.78rem', color: 'var(--text-muted)',
             marginBottom: '0.5rem', fontStyle: 'italic',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
           }}>
             {current.explanation}
           </div>

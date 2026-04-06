@@ -9,7 +9,7 @@ import { getNodeColor, CATEGORY_COLOR_MAP } from '../lib/graph.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import NodeTargetSelector from './NodeTargetSelector.jsx';
 
-const KNOWN_CATEGORIES = ['devops', 'web', 'network', 'security', 'database', 'language', 'concept'];
+const KNOWN_CATEGORIES = ['langage', 'framework', 'logiciel', 'os', 'protocole', 'bdd', 'service', 'concept', 'materiel'];
 const KNOWN_REL_TYPES  = ['uses', 'depends_on', 'related', 'part_of', 'extends', 'implements'];
 const RESOURCE_TYPES   = ['documentation', 'video', 'blog', 'course', 'book', 'other'];
 const CHAR_WARN_LIMIT  = 10000;
@@ -164,14 +164,15 @@ export default function EditorView() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Header */}
+      {/* Header — liquid glass */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: isMobile ? '0.4rem' : '0.75rem',
-        padding: isMobile ? '0.5rem 0.65rem' : '0.65rem 1rem',
+        padding: isMobile ? '0.5rem 0.65rem' : '0.7rem 1.1rem',
         borderBottom: '1px solid var(--border)',
-        background: 'rgba(255, 255, 255, 0.03)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.015) 100%)',
+        backdropFilter: 'blur(40px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 12px rgba(0,0,0,0.15)',
         flexShrink: 0,
       }}>
         <span style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text)' }}>

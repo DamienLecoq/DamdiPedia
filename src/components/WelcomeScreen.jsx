@@ -10,7 +10,7 @@ const EMOJI_LIST = [
   '🌍','🛡️','🗺️','📐','🔑','🧪','🌱','🏔️','💾','🎲',
 ];
 
-const KNOWN_CATEGORIES = ['devops', 'web', 'network', 'security', 'database', 'language', 'concept'];
+const KNOWN_CATEGORIES = ['langage', 'framework', 'logiciel', 'os', 'protocole', 'bdd', 'service', 'concept', 'materiel'];
 
 // ── Create view modal ─────────────────────────────────────────────────────────
 
@@ -43,13 +43,17 @@ function CreateViewModal({ existingCategories, onClose, onCreated }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
     }} onClick={onClose}>
       <div style={{
-        background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: 12, padding: '1.75rem', width: 460, maxWidth: '95vw',
+        background: 'linear-gradient(160deg, rgba(30,24,60,0.85) 0%, rgba(16,12,36,0.82) 100%)',
+        backdropFilter: 'blur(48px) saturate(180%)', WebkitBackdropFilter: 'blur(48px) saturate(180%)',
+        border: '1px solid var(--border)', borderTopColor: 'var(--border-hi)',
+        borderRadius: 'var(--radius)', padding: '1.75rem', width: 460, maxWidth: '95vw',
         display: 'flex', flexDirection: 'column', gap: '1.25rem',
+        boxShadow: 'var(--shadow), inset 0 1px 0 rgba(255,255,255,0.08)',
       }} onClick={e => e.stopPropagation()}>
 
         <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text)' }}>
@@ -88,12 +92,13 @@ function CreateViewModal({ existingCategories, onClose, onCreated }) {
                   type="button"
                   onClick={() => toggleCat(cat)}
                   style={{
-                    padding: '0.25rem 0.6rem', borderRadius: 20, fontSize: '0.78rem',
+                    padding: '0.25rem 0.7rem', borderRadius: 999, fontSize: '0.78rem',
                     cursor: 'pointer', fontWeight: active ? 600 : 400,
-                    background: active ? color + '33' : 'var(--bg)',
+                    background: active ? color + '20' : 'rgba(255,255,255,0.04)',
                     color: active ? color : 'var(--text-muted)',
-                    border: `1px solid ${active ? color : 'var(--border)'}`,
-                    transition: 'all 0.12s',
+                    border: `1px solid ${active ? color + '44' : 'rgba(255,255,255,0.08)'}`,
+                    transition: 'all 0.15s',
+                    boxShadow: active ? `inset 0 1px 0 rgba(255,255,255,0.08)` : 'none',
                   }}
                 >
                   {cat}
@@ -111,8 +116,8 @@ function CreateViewModal({ existingCategories, onClose, onCreated }) {
           <div style={{
             display: 'flex', flexWrap: 'wrap', gap: '0.4rem',
             maxHeight: 140, overflowY: 'auto',
-            background: 'var(--bg)', border: '1px solid var(--border)',
-            borderRadius: 6, padding: '0.6rem',
+            background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.06)',
+            borderRadius: 'var(--radius-sm)', padding: '0.6rem',
           }}>
             {EMOJI_LIST.map(e => (
               <button
@@ -196,24 +201,27 @@ export default function WelcomeScreen() {
               key={v.name}
               onClick={() => setActiveView(v)}
               style={{
-                width: 160, minHeight: 130, position: 'relative',
+                width: 165, minHeight: 138, position: 'relative',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 gap: '0.65rem',
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 12, cursor: 'pointer',
-                transition: 'border-color 0.15s, box-shadow 0.15s, transform 0.12s',
-                padding: '1.25rem 0.75rem',
+                background: 'linear-gradient(160deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.025) 100%)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderTopColor: 'rgba(255,255,255,0.15)',
+                borderRadius: 'var(--radius)', cursor: 'pointer',
+                transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                padding: '1.35rem 0.85rem',
+                backdropFilter: 'blur(20px)',
+                boxShadow: 'var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.07)',
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.borderColor = 'var(--accent)';
-                e.currentTarget.style.boxShadow = 'var(--glow-violet)';
-                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.borderColor = 'rgba(167,139,250,0.4)';
+                e.currentTarget.style.boxShadow = 'var(--glow-violet), var(--shadow), inset 0 1px 0 rgba(255,255,255,0.1)';
+                e.currentTarget.style.transform = 'translateY(-3px) scale(1.02)';
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.borderColor = 'var(--border)';
-                e.currentTarget.style.boxShadow = 'none';
-                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                e.currentTarget.style.boxShadow = 'var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.07)';
+                e.currentTarget.style.transform = 'translateY(0) scale(1)';
               }}
             >
               {/* Delete button for user views */}
@@ -246,8 +254,8 @@ export default function WelcomeScreen() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'center', marginTop: 2 }}>
                   {v.categories.slice(0, 3).map(c => (
                     <span key={c} style={{
-                      fontSize: '0.62rem', padding: '1px 5px', borderRadius: 10,
-                      background: 'var(--surface2)', color: 'var(--text-muted)', border: '1px solid var(--border)',
+                      fontSize: '0.62rem', padding: '2px 7px', borderRadius: 999,
+                      background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.06)',
                     }}>{c}</span>
                   ))}
                   {v.categories.length > 3 && (
@@ -263,23 +271,25 @@ export default function WelcomeScreen() {
         <button
           onClick={() => setShowCreate(true)}
           style={{
-            width: 160, minHeight: 130,
+            width: 165, minHeight: 138,
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             gap: '0.6rem',
             background: 'transparent',
-            border: '2px dashed var(--border)',
-            borderRadius: 12, cursor: 'pointer',
+            border: '2px dashed rgba(255,255,255,0.1)',
+            borderRadius: 'var(--radius)', cursor: 'pointer',
             color: 'var(--text-muted)',
-            transition: 'border-color 0.15s, color 0.15s',
-            padding: '1.25rem 0.75rem',
+            transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+            padding: '1.35rem 0.85rem',
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.borderColor = 'var(--accent)';
+            e.currentTarget.style.borderColor = 'rgba(167,139,250,0.5)';
             e.currentTarget.style.color = 'var(--accent)';
+            e.currentTarget.style.background = 'rgba(167,139,250,0.04)';
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.borderColor = 'var(--border)';
+            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
             e.currentTarget.style.color = 'var(--text-muted)';
+            e.currentTarget.style.background = 'transparent';
           }}
         >
           <span style={{ fontSize: '1.8rem', lineHeight: 1 }}>+</span>
@@ -298,13 +308,17 @@ export default function WelcomeScreen() {
 
       {confirmDelete && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
         }}>
           <div style={{
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 12, padding: '1.5rem', maxWidth: 340, width: '90%',
+            background: 'linear-gradient(160deg, rgba(30,24,60,0.85) 0%, rgba(16,12,36,0.82) 100%)',
+            backdropFilter: 'blur(48px) saturate(180%)', WebkitBackdropFilter: 'blur(48px) saturate(180%)',
+            border: '1px solid var(--border)', borderTopColor: 'var(--border-hi)',
+            borderRadius: 'var(--radius)', padding: '1.5rem', maxWidth: 360, width: '90%',
             display: 'flex', flexDirection: 'column', gap: '1rem',
+            boxShadow: 'var(--shadow), inset 0 1px 0 rgba(255,255,255,0.08)',
           }}>
             <p style={{ color: 'var(--text)' }}>
               Supprimer la vue <strong>« {confirmDelete} »</strong> ?
@@ -312,12 +326,12 @@ export default function WelcomeScreen() {
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
               <button className="btn-secondary" onClick={() => setConfirmDelete(null)}>Annuler</button>
               <button
+                className="btn-danger"
                 onClick={() => {
                   deleteUserView(confirmDelete);
                   setConfirmDelete(null);
                   refreshViews();
                 }}
-                style={{ background: 'var(--danger)', color: '#fff', border: 'none', borderRadius: 6, padding: '0.35rem 0.85rem', cursor: 'pointer', fontSize: '0.85rem' }}
               >Supprimer</button>
             </div>
           </div>

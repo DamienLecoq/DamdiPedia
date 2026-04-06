@@ -104,6 +104,115 @@ Raw JSON only:
 });
 
 // ---------------------------------------------------------------------------
+// Exercise generation prompt
+// ---------------------------------------------------------------------------
+export const buildExercisePrompt = (node, neighbors, depth, types, count) => {
+  const typeDescriptions = {
+    open_question: 'Question ouverte (l\'apprenant doit rédiger une réponse détaillée)',
+    flashcard: 'Flashcard (question courte → réponse courte à mémoriser)',
+    code_challenge: 'Code challenge (l\'apprenant doit écrire du code)',
+    reverse_explanation: 'Explication inverse (expliquer pourquoi NE PAS faire quelque chose)',
+    mcq: 'QCM (4 options, 1 seule correcte)',
+  };
+
+  const typeList = types.map(t => typeDescriptions[t] || t).join('\n- ');
+
+  const neighborsContext = neighbors.length > 0
+    ? `\n\nNœuds voisins (profondeur ${depth}) :\n${neighbors.map(n => `- ${n.label} (${n.category}): ${n.markdown_body}`).join('\n')}`
+    : '';
+
+  return {
+    system: `Tu es un générateur d'exercices pédagogiques IT. Tu génères des exercices variés pour aider à la révision.
+Retourne UNIQUEMENT un tableau JSON brut. Pas de markdown, pas de code fences.
+
+Chaque exercice doit avoir :
+- "type": un parmi [${types.map(t => `"${t}"`).join(', ')}]
+- "question": la question ou consigne
+- "relatedNodeId": l'id du nœud principal ou d'un voisin sur lequel porte l'exercice
+- "relatedNodeLabel": le label du nœud concerné
+
+Selon le type, ajoute :
+- open_question / reverse_explanation : "referenceAnswer" (réponse détaillée attendue)
+- flashcard : "answer" (réponse courte)
+- code_challenge : "language", "referenceCode" (solution de référence)
+- mcq : "options" (4 strings), "correct_answer" (0-3), "explanation"
+
+Les exercices doivent couvrir le nœud principal ET ses voisins quand depth > 0.`,
+    user: `Génère exactement ${count} exercices sur '${node.label}' (${node.category}).
+Profondeur du graphe : ${depth}.
+
+Types demandés :
+- ${typeList}
+
+Contenu du nœud principal :
+${node.markdown_body || '(pas de contenu)'}${neighborsContext}
+
+Retourne le JSON brut uniquement :
+[{"type":"...","question":"...","relatedNodeId":"${node.id}","relatedNodeLabel":"${node.label}", ...}]`,
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Correction prompt (for evaluating user answers)
+// ---------------------------------------------------------------------------
+export const buildCorrectionPrompt = (exercise, userAnswer, action) => {
+  const actionInstructions = {
+    evaluate: `Évalue la réponse de l'apprenant. Indique ce qui est correct, ce qui manque, et donne une note sur 10.`,
+    explain: `Explique en détail le concept abordé par cette question. Sois pédagogique et structuré.`,
+    simplify: `Simplifie l'explication de ce concept au maximum. Utilise des analogies simples et du vocabulaire accessible.`,
+    example: `Donne un ou plusieurs exemples concrets et pratiques pour illustrer ce concept.`,
+  };
+
+  return {
+    system: `Tu es un tuteur IT bienveillant. Tu aides l'apprenant à comprendre ses erreurs et à progresser. Réponds en français, en Markdown.`,
+    user: `Exercice (${exercise.type}) :
+${exercise.question}
+
+${exercise.referenceAnswer ? `Réponse attendue : ${exercise.referenceAnswer}` : ''}
+${exercise.answer ? `Réponse attendue : ${exercise.answer}` : ''}
+${exercise.referenceCode ? `Code attendu :\n\`\`\`${exercise.language || ''}\n${exercise.referenceCode}\n\`\`\`` : ''}
+${exercise.correct_answer !== undefined ? `Réponse correcte : ${exercise.options[exercise.correct_answer]}` : ''}
+
+Réponse de l'apprenant :
+${userAnswer}
+
+${actionInstructions[action] || actionInstructions.evaluate}`,
+  };
+};
+
+// ---------------------------------------------------------------------------
+// parseExerciseResponse — validates AI exercise output
+// ---------------------------------------------------------------------------
+export const parseExerciseResponse = (raw) => {
+  const cleaned = raw
+    .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+
+  let parsed;
+  try { parsed = JSON.parse(cleaned); } catch (e) {
+    throw new Error('Invalid JSON: ' + e.message);
+  }
+  if (!Array.isArray(parsed)) throw new Error('Not an array');
+
+  const VALID_TYPES = ['open_question', 'flashcard', 'code_challenge', 'reverse_explanation', 'mcq'];
+
+  parsed.forEach((ex, i) => {
+    if (!VALID_TYPES.includes(ex.type))
+      throw new Error(`Ex${i}: invalid type '${ex.type}'`);
+    if (typeof ex.question !== 'string' || !ex.question.trim())
+      throw new Error(`Ex${i}: missing question`);
+
+    if (ex.type === 'mcq') {
+      if (!Array.isArray(ex.options) || ex.options.length !== 4)
+        throw new Error(`Ex${i}: MCQ needs 4 options`);
+      if (typeof ex.correct_answer !== 'number' || ex.correct_answer < 0 || ex.correct_answer > 3)
+        throw new Error(`Ex${i}: correct_answer must be 0–3`);
+    }
+  });
+
+  return parsed;
+};
+
+// ---------------------------------------------------------------------------
 // parseQuizResponse — validates AI output, throws on bad schema
 // ---------------------------------------------------------------------------
 export const parseQuizResponse = (raw) => {

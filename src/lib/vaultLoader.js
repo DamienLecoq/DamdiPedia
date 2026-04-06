@@ -1,17 +1,14 @@
 /**
  * vaultLoader.js — single global vault + named views.
  *
- * All built-in vault folders are merged into one global pool (no silos).
+ * Built-in .md files live in /src/vaults/ (flat, no sub-folders).
  * User-created nodes are stored in one global localStorage key.
  * "Views" are named category-filter presets (not separate data stores).
  */
 
-// Import .md files as raw strings.
-// On Vite 5 / Windows, `query: '?raw'` can break path resolution in rollup,
-// so we rely on the vite config `assetsInclude` + a raw import suffix workaround.
-// We import the modules normally and each .md resolves to its default string export
-// because vite.config.js treats .md as raw via the raw plugin or assetsInclude.
-const _raw = import.meta.glob('/src/vaults/**/*.md', { eager: true, import: 'default' });
+// Import node .md files as raw strings from the nodes/ sub-folder.
+// vite.config.js treats .md as raw via the raw plugin or assetsInclude.
+const _raw = import.meta.glob('/src/vaults/nodes/*.md', { eager: true, import: 'default' });
 
 const GLOBAL_CONTENT_KEY = 'damdipedia:global-content';
 const VIEWS_KEY          = 'damdipedia:user-views';
@@ -19,12 +16,12 @@ const VIEWS_KEY          = 'damdipedia:user-views';
 // ── Built-in view presets ─────────────────────────────────────────────────────
 
 export const BUILTIN_VIEWS = [
-  { name: 'Tout',          icon: '🌐', categories: null,                            builtin: true },
-  { name: 'DevOps',        icon: '🚀', categories: ['devops'],                      builtin: true },
-  { name: 'Réseau',        icon: '📡', categories: ['network'],                     builtin: true },
-  { name: 'Sécurité',      icon: '🔐', categories: ['security'],                    builtin: true },
-  { name: 'Développement', icon: '💻', categories: ['language', 'web', 'database'], builtin: true },
-  { name: 'Concepts',      icon: '🧠', categories: ['concept'],                     builtin: true },
+  { name: 'Tout',           icon: '🌐', categories: null,                                  builtin: true },
+  { name: 'Développement',  icon: '💻', categories: ['langage', 'framework', 'bdd'],       builtin: true },
+  { name: 'Infrastructure', icon: '🚀', categories: ['logiciel', 'os', 'service'],         builtin: true },
+  { name: 'Réseau',         icon: '📡', categories: ['protocole'],                         builtin: true },
+  { name: 'Concepts',       icon: '🧠', categories: ['concept'],                           builtin: true },
+  { name: 'Matériel',       icon: '🖥️', categories: ['materiel'],                          builtin: true },
 ];
 
 // ── Global built-in files (all vault folders merged) ─────────────────────────
@@ -32,7 +29,7 @@ export const BUILTIN_VIEWS = [
 export function getGlobalBuiltInFiles() {
   const files = {};
   for (const [path, content] of Object.entries(_raw)) {
-    const match = path.match(/\/src\/vaults\/[^/]+\/([^/]+\.md)$/);
+    const match = path.match(/\/src\/vaults\/nodes\/([^/]+\.md)$/);
     if (match) files[match[1]] = content;
   }
   return files;

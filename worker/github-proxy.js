@@ -13,7 +13,9 @@
 
 const REPO_OWNER = 'DamienLecoq';
 const REPO_NAME = 'DamdiPedia';
-const VAULT_PREFIX = 'src/vaults/IT';
+const VAULT_PREFIX = 'src/vaults';
+const NODES_DIR = VAULT_PREFIX + '/nodes';
+const EXERCISES_DIR = VAULT_PREFIX + '/exercises';
 const BRANCH = 'main';
 
 const CORS = {
@@ -62,6 +64,14 @@ function utf8ToBase64(str) {
   return btoa(binary);
 }
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Resolve GitHub path from filename: .md → nodes/, .json → exercises/ */
+function resolveGhPath(filename) {
+  if (filename.endsWith('.json')) return `${EXERCISES_DIR}/${filename}`;
+  return `${NODES_DIR}/${filename}`;
+}
+
 // ── Route handlers ──────────────────────────────────────────────────────────
 
 async function handleGetVault(token) {
@@ -69,7 +79,9 @@ async function handleGetVault(token) {
   const tree = await ghApi(token, `/git/trees/${BRANCH}?recursive=1`);
 
   const vaultBlobs = tree.tree.filter(
-    (f) => f.type === 'blob' && f.path.startsWith(VAULT_PREFIX + '/') && f.path.endsWith('.md'),
+    (f) => f.type === 'blob' &&
+           (f.path.startsWith(NODES_DIR + '/') || f.path.startsWith(EXERCISES_DIR + '/')) &&
+           (f.path.endsWith('.md') || f.path.endsWith('.json')),
   );
 
   const files = {};
@@ -98,7 +110,7 @@ async function handleGetVault(token) {
 async function handlePutFile(token, filename, content, password, editPassword) {
   if (editPassword && password !== editPassword) return err('Unauthorized', 401);
 
-  const path = `${VAULT_PREFIX}/${filename}`;
+  const path = resolveGhPath(filename);
 
   const body = {
     message: `Update ${filename}`,
@@ -123,7 +135,7 @@ async function handlePutFile(token, filename, content, password, editPassword) {
 async function handleDeleteFile(token, filename, password, editPassword) {
   if (editPassword && password !== editPassword) return err('Unauthorized', 401);
 
-  const path = `${VAULT_PREFIX}/${filename}`;
+  const path = resolveGhPath(filename);
 
   // Get SHA
   const existing = await ghApi(token, `/contents/${path}`);
@@ -162,14 +174,14 @@ export default {
       }
 
       // PUT /vault/:filename — create or update
-      const putMatch = path.match(/^\/vault\/(.+\.md)$/);
+      const putMatch = path.match(/^\/vault\/(.+\.(?:md|json))$/);
       if (request.method === 'PUT' && putMatch) {
         const body = await request.json();
         return await handlePutFile(token, putMatch[1], body.content, body.password, env.EDIT_PASSWORD);
       }
 
       // DELETE /vault/:filename — delete
-      const delMatch = path.match(/^\/vault\/(.+\.md)$/);
+      const delMatch = path.match(/^\/vault\/(.+\.(?:md|json))$/);
       if (request.method === 'DELETE' && delMatch) {
         const body = await request.json();
         return await handleDeleteFile(token, delMatch[1], body.password, env.EDIT_PASSWORD);

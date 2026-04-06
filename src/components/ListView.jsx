@@ -99,20 +99,23 @@ export default function ListView() {
         )}
       </div>
 
-      {/* Category filters */}
+      {/* Category filters — liquid glass pills */}
       {clusters.length > 0 && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap',
-          padding: '0.45rem 1rem', borderBottom: '1px solid var(--border)', flexShrink: 0,
-          background: 'var(--surface)',
+          padding: '0.5rem 1rem', borderBottom: '1px solid var(--border)', flexShrink: 0,
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
         }}>
           <button
             onClick={() => setFilterCat(null)}
             style={{
-              fontSize: '0.72rem', padding: '0.15rem 0.55rem', borderRadius: 12, cursor: 'pointer',
-              background: !filterCat ? 'var(--accent)' : 'transparent',
+              fontSize: '0.72rem', padding: '0.18rem 0.65rem', borderRadius: 999, cursor: 'pointer',
+              background: !filterCat ? 'var(--accent)' : 'rgba(255,255,255,0.04)',
               color: !filterCat ? '#fff' : 'var(--text-muted)',
-              border: `1px solid ${!filterCat ? 'var(--accent)' : 'var(--border)'}`,
+              border: `1px solid ${!filterCat ? 'var(--accent)' : 'rgba(255,255,255,0.08)'}`,
+              boxShadow: !filterCat ? '0 2px 8px rgba(167,139,250,0.3), inset 0 1px 0 rgba(255,255,255,0.15)' : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+              transition: 'all 0.15s',
             }}
           >
             Tout
@@ -122,12 +125,14 @@ export default function ListView() {
               key={c.category}
               onClick={() => setFilterCat(filterCat === c.category ? null : c.category)}
               style={{
-                fontSize: '0.72rem', padding: '0.15rem 0.55rem', borderRadius: 12, cursor: 'pointer',
+                fontSize: '0.72rem', padding: '0.18rem 0.65rem', borderRadius: 999, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: '0.35rem',
-                background: filterCat === c.category ? c.color + '22' : 'transparent',
+                background: filterCat === c.category ? c.color + '18' : 'rgba(255,255,255,0.04)',
                 color: filterCat === c.category ? c.color : 'var(--text-muted)',
-                border: `1px solid ${filterCat === c.category ? c.color : 'var(--border)'}`,
+                border: `1px solid ${filterCat === c.category ? c.color + '44' : 'rgba(255,255,255,0.08)'}`,
                 fontWeight: filterCat === c.category ? 600 : 400,
+                boxShadow: filterCat === c.category ? `0 2px 8px ${c.color}33, inset 0 1px 0 rgba(255,255,255,0.1)` : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                transition: 'all 0.15s',
               }}
             >
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: c.color, flexShrink: 0, display: 'inline-block', boxShadow: `0 0 4px ${c.color}` }} />
@@ -151,9 +156,14 @@ export default function ListView() {
                   key={node.id}
                   onClick={() => handleRowClick(node.id)}
                   style={{
-                    padding: '0.65rem 0.75rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                    background: isSelected ? 'rgba(167,139,250,0.12)' : 'var(--surface)',
-                    border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
+                    padding: '0.7rem 0.85rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                    background: isSelected
+                      ? 'linear-gradient(160deg, rgba(167,139,250,0.14) 0%, rgba(167,139,250,0.06) 100%)'
+                      : 'linear-gradient(160deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)',
+                    border: `1px solid ${isSelected ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.06)'}`,
+                    borderTopColor: isSelected ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.1)',
+                    boxShadow: isSelected ? 'var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.08)' : 'inset 0 1px 0 rgba(255,255,255,0.05)',
+                    transition: 'all 0.15s',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.35rem' }}>
@@ -167,7 +177,7 @@ export default function ListView() {
                     )}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', fontSize: '0.73rem', color: 'var(--text-muted)' }}>
-                    <span style={{ background: color + '22', color, padding: '0.08rem 0.4rem', borderRadius: 3, border: `1px solid ${color}44` }}>{node.category}</span>
+                    <span style={{ background: color + '18', color, padding: '0.1rem 0.5rem', borderRadius: 999, border: `1px solid ${color}33` }}>{node.category}</span>
                     <span>{PRIORITY_LABELS[node.priority] || node.priority}</span>
                     <span>{STATUS_LABELS[node.status] || node.status}</span>
                     <span>↔ {connectionCount.get(node.id) || 0}</span>
@@ -184,7 +194,7 @@ export default function ListView() {
         ) : (
           /* ── Desktop: table layout ── */
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
-            <thead style={{ position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1 }}>
+            <thead style={{ position: 'sticky', top: 0, background: 'linear-gradient(180deg, rgba(20,16,42,0.95) 0%, rgba(16,12,36,0.9) 100%)', backdropFilter: 'blur(20px)', zIndex: 1 }}>
               <tr>
                 {COL_DEFS.map(col => (
                   <th

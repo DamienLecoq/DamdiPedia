@@ -59,9 +59,11 @@ export default function AISummary({ nodeId, depth }) {
         </button>
       </div>
       <div className="markdown-body" style={{
-        background: 'var(--bg)', border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)', padding: '0.75rem',
+        background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+        borderTopColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 'var(--radius)', padding: '0.85rem',
         maxHeight: 400, overflowY: 'auto',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
       }}>
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{cached}</ReactMarkdown>
       </div>

@@ -14,8 +14,10 @@ import SearchBar from './components/SearchBar.jsx';
 import EditorView from './components/EditorView.jsx';
 import ListView from './components/ListView.jsx';
 import DashboardView from './components/DashboardView.jsx';
+import ExercisesView from './components/ExercisesView.jsx';
 import GraphHealthPanel from './components/GraphHealthPanel.jsx';
 import ToastContainer from './components/Toast.jsx';
+import ExerciseSheet, { ExerciseToggleTab } from './components/ExerciseSheet.jsx';
 
 // ── ZIP mode banner ───────────────────────────────────────────────────────────
 function ZipModeBanner({ onExport }) {
@@ -46,11 +48,14 @@ function AuthModal({ onClose }) {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
       <div style={{
-        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-        padding: '1.5rem', maxWidth: 340, width: '90%',
-        boxShadow: 'var(--glow-violet)',
+        background: 'linear-gradient(160deg, rgba(30, 24, 60, 0.82) 0%, rgba(16, 12, 36, 0.78) 100%)',
+        backdropFilter: 'blur(48px) saturate(180%)', WebkitBackdropFilter: 'blur(48px) saturate(180%)',
+        border: '1px solid var(--border)', borderTopColor: 'var(--border-hi)',
+        borderRadius: 'var(--radius)',
+        padding: '1.75rem', maxWidth: 360, width: '90%',
+        boxShadow: 'var(--shadow), inset 0 1px 0 rgba(255,255,255,0.08)',
       }}>
         <h3 style={{ marginBottom: '0.5rem', color: 'var(--text)', fontSize: '1rem' }}>🔒 Déverrouiller les modifications</h3>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.83rem', marginBottom: '1rem' }}>
@@ -124,6 +129,7 @@ function TopNav({ onShowAuth }) {
       <NavBtn view="graph"     label="Graphe"          icon="⬡" />
       <NavBtn view="list"      label="Liste"            icon="☰" />
       <NavBtn view="dashboard" label="Tableau de bord"  icon="▦" />
+      {editUnlocked && <NavBtn view="exercises" label="Exercices" icon="✍" />}
 
       {nodes.length > 0 && !isMobile && <SearchBar />}
       {isMobile && nodes.length > 0 && (
@@ -161,9 +167,11 @@ function TopNav({ onShowAuth }) {
         <button
           onClick={() => useGraphStore.getState().syncFromGitHub()}
           style={{
-            background: 'none', border: '1px solid var(--success)',
-            borderRadius: 6, padding: '0.2rem 0.5rem', fontSize: '0.9rem',
+            background: 'rgba(52, 211, 153, 0.08)', border: '1px solid rgba(52, 211, 153, 0.3)',
+            borderTopColor: 'rgba(255,255,255,0.12)',
+            borderRadius: 999, padding: '0.2rem 0.55rem', fontSize: '0.9rem',
             color: 'var(--success)', cursor: 'pointer',
+            backdropFilter: 'blur(12px)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
           }}
           title="Sync GitHub"
         >
@@ -175,10 +183,13 @@ function TopNav({ onShowAuth }) {
         <button
           onClick={editUnlocked ? lockEdit : onShowAuth}
           style={{
-            background: 'none', border: `1px solid ${editUnlocked ? 'var(--success)' : 'var(--border)'}`,
-            borderRadius: 6, padding: '0.2rem 0.5rem', fontSize: '0.9rem',
+            background: editUnlocked ? 'rgba(52, 211, 153, 0.08)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${editUnlocked ? 'rgba(52, 211, 153, 0.3)' : 'var(--border)'}`,
+            borderTopColor: 'rgba(255,255,255,0.12)',
+            borderRadius: 999, padding: '0.2rem 0.55rem', fontSize: '0.9rem',
             color: editUnlocked ? 'var(--success)' : 'var(--text-muted)',
             cursor: 'pointer',
+            backdropFilter: 'blur(12px)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
           }}
           title={editUnlocked ? 'Verrouiller les modifications' : 'Déverrouiller les modifications'}
         >
@@ -210,6 +221,7 @@ function MainContent() {
     </>
   );
   if (currentView === 'dashboard') return <DashboardView />;
+  if (currentView === 'exercises') return <ExercisesView />;
   if (currentView === 'health') return <GraphHealthPanel />;
 
   return (
@@ -223,8 +235,8 @@ function MainContent() {
 // ── Quiz block modal ───────────────────────────────────────────────────────────
 function QuizBlockModal({ onContinue, onAbandon }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1.5rem', maxWidth: 400, width: '90%' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+      <div style={{ background: 'linear-gradient(160deg, rgba(30,24,60,0.82) 0%, rgba(16,12,36,0.78) 100%)', backdropFilter: 'blur(48px) saturate(180%)', WebkitBackdropFilter: 'blur(48px) saturate(180%)', border: '1px solid var(--border)', borderTopColor: 'var(--border-hi)', borderRadius: 'var(--radius)', padding: '1.75rem', maxWidth: 400, width: '90%', boxShadow: 'var(--shadow), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
         <h3 style={{ marginBottom: '0.75rem', color: 'var(--text)' }}>Quiz en cours</h3>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '1.25rem' }}>
           Quitter et perdre votre progression ?
@@ -243,6 +255,7 @@ export default function App() {
   const zipDirty  = useGraphStore(s => s.zipDirty);
   const exportZip = useGraphStore(s => s.exportZip);
   const editorDirty = useUiStore(s => s.editorDirty);
+  const editUnlocked = useUiStore(s => s.editUnlocked);
   const showAuthModal = useUiStore(s => s.showAuthModal);
   const closeAuthModal = useUiStore(s => s.closeAuthModal);
 
@@ -301,6 +314,9 @@ export default function App() {
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           <MainContent />
         </div>
+
+        {editUnlocked && <ExerciseToggleTab />}
+        {editUnlocked && <ExerciseSheet />}
 
         <ToastContainer />
 

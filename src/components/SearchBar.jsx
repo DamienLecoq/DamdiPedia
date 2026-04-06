@@ -69,32 +69,39 @@ export default function SearchBar() {
         placeholder="Search nodes… (Ctrl+K)"
         style={{
           width: '100%',
-          background: 'var(--bg)',
+          background: 'linear-gradient(160deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.025) 100%)',
           border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
+          borderTopColor: 'var(--border-hi)',
+          borderRadius: 999,
           color: 'var(--text)',
-          padding: '0.3rem 0.65rem',
+          padding: '0.35rem 0.85rem',
           fontSize: '0.83rem',
+          backdropFilter: 'blur(16px)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
         }}
       />
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 200,
-          background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+          position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 200,
+          background: 'linear-gradient(160deg, rgba(24,20,50,0.88) 0%, rgba(14,10,34,0.85) 100%)',
+          backdropFilter: 'blur(48px) saturate(180%)', WebkitBackdropFilter: 'blur(48px) saturate(180%)',
+          border: '1px solid var(--border)', borderTopColor: 'var(--border-hi)',
+          borderRadius: 'var(--radius)', boxShadow: 'var(--shadow), inset 0 1px 0 rgba(255,255,255,0.07)',
+          overflow: 'hidden',
         }}>
           {results.map((r, i) => (
             <div
               key={r.item.id}
               onMouseDown={() => handleSelect(r.item.id)}
               style={{
-                padding: '0.45rem 0.75rem',
+                padding: '0.5rem 0.85rem',
                 cursor: 'pointer',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                borderBottom: i < results.length - 1 ? '1px solid var(--border)' : 'none',
+                borderBottom: i < results.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
                 fontSize: '0.83rem',
+                transition: 'background 0.15s',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               <span style={{ color: 'var(--text)' }}>{r.item.label}</span>

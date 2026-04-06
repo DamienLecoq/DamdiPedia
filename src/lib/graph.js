@@ -120,14 +120,16 @@ export function buildLinks(nodes) {
 // ---------------------------------------------------------------------------
 export function buildClusters(nodes) {
   const CATEGORY_COLORS = {
-    devops:   '#5eead4',   // teal
-    web:      '#60a5fa',   // soft blue
-    network:  '#818cf8',   // indigo
-    security: '#f87171',   // warm red
-    database: '#fb923c',   // warm orange
-    language: '#c084fc',   // soft purple
-    concept:  '#a78bfa',   // violet (matches accent)
-    default:  '#94a3b8',   // cool gray
+    langage:   '#c084fc',   // violet
+    framework: '#60a5fa',   // bleu
+    logiciel:  '#5eead4',   // teal
+    os:        '#4ade80',   // vert
+    protocole: '#818cf8',   // indigo
+    bdd:       '#fbbf24',   // ambre
+    service:   '#fb923c',   // orange
+    concept:   '#f472b6',   // rose
+    materiel:  '#f87171',   // rouge
+    default:   '#94a3b8',   // gris
   };
 
   const map = new Map();
@@ -224,14 +226,16 @@ export function selectTopNodes(nodes, links, maxCount = 150, categoryFilter = nu
 // Node color — computed at render time, never auto-written to file
 // ---------------------------------------------------------------------------
 export const CATEGORY_COLOR_MAP = {
-  devops:   '#5eead4',
-  web:      '#60a5fa',
-  network:  '#818cf8',
-  security: '#f87171',
-  database: '#fb923c',
-  language: '#c084fc',
-  concept:  '#a78bfa',
-  default:  '#94a3b8',
+  langage:   '#c084fc',   // violet
+  framework: '#60a5fa',   // bleu
+  logiciel:  '#5eead4',   // teal
+  os:        '#4ade80',   // vert
+  protocole: '#818cf8',   // indigo
+  bdd:       '#fbbf24',   // ambre
+  service:   '#fb923c',   // orange
+  concept:   '#f472b6',   // rose
+  materiel:  '#f87171',   // rouge
+  default:   '#94a3b8',   // gris
 };
 
 export const getNodeColor = (node) =>

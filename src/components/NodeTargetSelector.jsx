@@ -57,20 +57,23 @@ export default function NodeTargetSelector({ value, onChange, nodes }) {
 
       {showDropdown && suggestions.length > 0 && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0, zIndex: 300,
-          background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-          maxHeight: 200, overflowY: 'auto',
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 300,
+          background: 'linear-gradient(160deg, rgba(24,20,50,0.9) 0%, rgba(14,10,34,0.88) 100%)',
+          backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+          border: '1px solid var(--border)', borderTopColor: 'var(--border-hi)',
+          borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.06)',
+          maxHeight: 200, overflowY: 'auto', overflow: 'hidden',
         }}>
           {suggestions.map(n => (
             <div
               key={n.id}
               onMouseDown={() => handleSelect(n)}
               style={{
-                padding: '0.35rem 0.6rem', cursor: 'pointer', fontSize: '0.82rem',
+                padding: '0.4rem 0.7rem', cursor: 'pointer', fontSize: '0.82rem',
                 display: 'flex', justifyContent: 'space-between',
+                transition: 'background 0.12s',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               <span>{n.label}</span>

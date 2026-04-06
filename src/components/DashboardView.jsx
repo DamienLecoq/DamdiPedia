@@ -8,11 +8,16 @@ const TODAY = new Date().toISOString().split('T')[0];
 function StatCard({ label, value, color }) {
   return (
     <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-      padding: '0.75rem 1.25rem', textAlign: 'center', minWidth: 100,
+      background: 'linear-gradient(160deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.025) 100%)',
+      border: '1px solid var(--border)', borderTopColor: 'var(--border-hi)',
+      borderRadius: 'var(--radius)',
+      padding: '0.85rem 1.35rem', textAlign: 'center', minWidth: 110,
+      backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+      boxShadow: 'var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.07)',
+      transition: 'transform 0.2s, box-shadow 0.2s',
     }}>
       <div style={{ fontSize: '1.5rem', fontWeight: 700, color: color || 'var(--accent)' }}>{value}</div>
-      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>{label}</div>
+      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>{label}</div>
     </div>
   );
 }
@@ -21,8 +26,13 @@ function ProgressBar({ value, max, color }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: color || 'var(--accent)', borderRadius: 3, boxShadow: `0 0 6px ${color || 'var(--accent)'}` }} />
+      <div style={{ flex: 1, height: 7, background: 'rgba(255,255,255,0.06)', borderRadius: 999, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.04)' }}>
+        <div style={{
+          width: `${pct}%`, height: '100%',
+          background: `linear-gradient(90deg, ${color || 'var(--accent)'}, ${color || 'var(--accent)'}cc)`,
+          borderRadius: 999, boxShadow: `0 0 8px ${color || 'var(--accent)'}55`,
+          transition: 'width 0.4s ease',
+        }} />
       </div>
       <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', minWidth: 38, textAlign: 'right' }}>
         {value}/{max}
@@ -85,13 +95,18 @@ export default function DashboardView() {
           color={healthy ? 'var(--success)' : 'var(--warning)'} />
       </div>
 
-      {/* Graph health badge */}
+      {/* Graph health badge — liquid glass */}
       <div style={{
         marginBottom: '1.75rem',
-        padding: '0.6rem 1rem', borderRadius: 'var(--radius)',
-        background: healthy ? 'rgba(0,229,160,0.06)' : 'rgba(255,213,79,0.06)',
-        border: `1px solid ${healthy ? 'var(--success)' : 'var(--warning)'}`,
+        padding: '0.7rem 1.1rem', borderRadius: 'var(--radius)',
+        background: healthy
+          ? 'linear-gradient(160deg, rgba(52,211,153,0.08) 0%, rgba(52,211,153,0.03) 100%)'
+          : 'linear-gradient(160deg, rgba(251,191,36,0.08) 0%, rgba(251,191,36,0.03) 100%)',
+        border: `1px solid ${healthy ? 'rgba(52,211,153,0.3)' : 'rgba(251,191,36,0.3)'}`,
+        borderTopColor: 'rgba(255,255,255,0.12)',
         display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.85rem',
+        backdropFilter: 'blur(16px)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
       }}>
         {healthy ? (
           <span style={{ color: 'var(--success)' }}>✓ Le graphe est en bonne santé.</span>
@@ -117,12 +132,14 @@ export default function DashboardView() {
               <div key={node.id}
                 onClick={() => handleNodeClick(node.id)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '0.4rem 0.75rem',
-                  background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6,
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '0.45rem 0.85rem',
+                  background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', borderTopColor: 'rgba(255,255,255,0.1)',
+                  borderRadius: 12,
                   cursor: 'pointer', fontSize: '0.83rem',
+                  transition: 'all 0.15s', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'var(--surface)'}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.borderColor = 'rgba(167,139,250,0.2)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.035)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
               >
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: getNodeColor(node), flexShrink: 0, boxShadow: `0 0 4px ${getNodeColor(node)}` }} />
                 <span style={{ flex: 1 }}>{node.label}</span>
@@ -170,12 +187,14 @@ export default function DashboardView() {
               <div key={node.id}
                 onClick={() => handleNodeClick(node.id)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '0.35rem 0.75rem',
-                  background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6,
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '0.4rem 0.85rem',
+                  background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', borderTopColor: 'rgba(255,255,255,0.1)',
+                  borderRadius: 12,
                   cursor: 'pointer', fontSize: '0.83rem',
+                  transition: 'all 0.15s', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'var(--surface)'}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.borderColor = 'rgba(167,139,250,0.2)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.035)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
               >
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: getNodeColor(node), flexShrink: 0, boxShadow: `0 0 4px ${getNodeColor(node)}` }} />
                 <span style={{ flex: 1 }}>{node.label}</span>

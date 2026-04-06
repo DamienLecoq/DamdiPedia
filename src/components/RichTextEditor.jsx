@@ -12,13 +12,13 @@ function Btn({ active, onMouseDown, title, children, style }) {
       title={title}
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        minWidth: 28, height: 26, padding: '0 6px',
-        border: '1px solid transparent', borderRadius: 6, cursor: 'pointer',
+        minWidth: 28, height: 26, padding: '0 7px',
+        border: '1px solid transparent', borderRadius: 8, cursor: 'pointer',
         fontSize: '0.78rem', fontWeight: 600, lineHeight: 1,
-        background: active ? 'rgba(167, 139, 250, 0.25)' : 'transparent',
+        background: active ? 'rgba(167, 139, 250, 0.22)' : 'transparent',
         color: active ? 'var(--accent-hover)' : 'var(--text-muted)',
         borderColor: active ? 'rgba(167, 139, 250, 0.3)' : 'transparent',
-        boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.08)' : 'none',
+        boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.1), 0 1px 4px rgba(167,139,250,0.15)' : 'none',
         transition: 'all 0.15s ease',
         ...style,
       }}
@@ -42,11 +42,12 @@ function Toolbar({ editor }) {
 
   return (
     <div style={{
-      display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center',
-      padding: '5px 8px',
-      background: 'rgba(255, 255, 255, 0.04)',
+      display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center',
+      padding: '6px 10px',
+      background: 'linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)',
       borderBottom: '1px solid var(--border)',
-      borderRadius: '10px 10px 0 0',
+      borderRadius: 'var(--radius) var(--radius) 0 0',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
     }}>
       {/* Headings */}
       <Btn

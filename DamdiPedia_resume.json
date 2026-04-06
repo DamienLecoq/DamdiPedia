@@ -29,7 +29,7 @@
     "file_structure": {
       "example_file": {
         "filename": "docker.md",
-        "content_example": "---\nid: docker\nlabel: Docker\ncategory: devops\npriority: high\nstatus: learning\nlast_quiz_score: null\nnext_review: null\nease_factor: 2.5\ninterval: 1\ncreatedAt: 2025-01-10T10:00:00Z\nupdatedAt: 2025-01-10T10:00:00Z\nrelations:\n  - target: kubernetes\n    type: depends_on\n    weight: 0.9\n  - target: linux\n    type: uses\n    weight: 0.7\nresources:\n  - type: documentation\n    title: Docker Official Docs\n    url: https://docs.docker.com\n---\n\n## What is Docker?\nDocker is a containerization platform.\n\n## Key Concepts\n- **Image**: Read-only template\n- **Container**: Running instance\n- **Dockerfile**: Build script\n- **Registry**: Image storage\n",
+        "content_example": "---\nid: docker\nlabel: Docker\ncategory: logiciel\npriority: high\nstatus: learning\nlast_quiz_score: null\nnext_review: null\nease_factor: 2.5\ninterval: 1\ncreatedAt: 2025-01-10T10:00:00Z\nupdatedAt: 2025-01-10T10:00:00Z\nrelations:\n  - target: kubernetes\n    type: depends_on\n    weight: 0.9\n  - target: linux\n    type: uses\n    weight: 0.7\nresources:\n  - type: documentation\n    title: Docker Official Docs\n    url: https://docs.docker.com\n---\n\n## What is Docker?\nDocker is a containerization platform.\n\n## Key Concepts\n- **Image**: Read-only template\n- **Container**: Running instance\n- **Dockerfile**: Build script\n- **Registry**: Image storage\n",
         "color_field_note": "color is OMITTED from frontmatter when null (the default). Only write color if user explicitly sets a custom value. matter.stringify omits undefined fields — set color to undefined (not null) in the data object before serializing."
       }
     }
@@ -239,7 +239,7 @@
   "node_color": {
     "rule": "Computed at render time. NEVER auto-written to file. Only write if user explicitly sets custom color.",
     "render": "export const getNodeColor = (node) => node.color || CATEGORY_COLOR_MAP[node.category] || CATEGORY_COLOR_MAP.default;",
-    "map": { "devops": "#4ECDC4", "web": "#45B7D1", "network": "#96CEB4", "security": "#FF6B6B", "database": "#FFEAA7", "language": "#DDA0DD", "concept": "#98D8C8", "default": "#A0A0A0" }
+    "map": { "langage": "#c084fc", "framework": "#60a5fa", "logiciel": "#5eead4", "os": "#4ade80", "protocole": "#818cf8", "bdd": "#fbbf24", "service": "#fb923c", "concept": "#f472b6", "materiel": "#f87171", "default": "#94a3b8" }
   },
 
   "data_model": {
@@ -661,12 +661,12 @@
     "nodes": [
       {
         "filename": "docker.md",
-        "frontmatter": { "id": "docker", "label": "Docker", "category": "devops", "priority": "high", "status": "learning", "ease_factor": 2.5, "interval": 1, "relations": [{ "target": "kubernetes", "type": "depends_on", "weight": 0.9 }, { "target": "linux", "type": "uses", "weight": 0.7 }], "resources": [{ "type": "documentation", "title": "Docker Official Docs", "url": "https://docs.docker.com" }] },
+        "frontmatter": { "id": "docker", "label": "Docker", "category": "logiciel", "priority": "high", "status": "learning", "ease_factor": 2.5, "interval": 1, "relations": [{ "target": "kubernetes", "type": "depends_on", "weight": 0.9 }, { "target": "linux", "type": "uses", "weight": 0.7 }], "resources": [{ "type": "documentation", "title": "Docker Official Docs", "url": "https://docs.docker.com" }] },
         "body": "## What is Docker?\nDocker is a containerization platform that packages apps with their dependencies.\n\n## Key Concepts\n- **Image**: Read-only template\n- **Container**: Running instance\n- **Dockerfile**: Build script\n- **Registry**: Image storage\n\n## Common Commands\n```bash\ndocker build -t my-app .\ndocker run -p 3000:3000 my-app\ndocker ps\n```"
       },
       {
         "filename": "kubernetes.md",
-        "frontmatter": { "id": "kubernetes", "label": "Kubernetes", "category": "devops", "priority": "high", "status": "learning", "ease_factor": 2.5, "interval": 1, "relations": [{ "target": "docker", "type": "uses", "weight": 0.9 }, { "target": "linux", "type": "uses", "weight": 0.6 }] },
+        "frontmatter": { "id": "kubernetes", "label": "Kubernetes", "category": "logiciel", "priority": "high", "status": "learning", "ease_factor": 2.5, "interval": 1, "relations": [{ "target": "docker", "type": "uses", "weight": 0.9 }, { "target": "linux", "type": "uses", "weight": 0.6 }] },
         "body": "## What is Kubernetes?\nK8s is an open-source container orchestration platform.\n\n## Key Concepts\n- **Pod**: Smallest deployable unit\n- **Node**: Worker machine\n- **Cluster**: Set of nodes\n- **Deployment**: Manages pod replicas\n- **Service**: Stable network endpoint"
       },
       {
@@ -677,12 +677,12 @@
       {
         "filename": "tcpip.md",
         "note": "slugify('TCP/IP') === 'tcpip'. id and filename MUST be 'tcpip'.",
-        "frontmatter": { "id": "tcpip", "label": "TCP/IP", "category": "network", "priority": "medium", "status": "to_review", "ease_factor": 2.3, "interval": 4, "relations": [{ "target": "http", "type": "depends_on", "weight": 0.8 }] },
+        "frontmatter": { "id": "tcpip", "label": "TCP/IP", "category": "protocole", "priority": "medium", "status": "to_review", "ease_factor": 2.3, "interval": 4, "relations": [{ "target": "http", "type": "depends_on", "weight": 0.8 }] },
         "body": "## What is TCP/IP?\nTCP/IP is the foundational protocol suite of the internet.\n\n## Layers\n- Application, Transport, Internet, Network Access\n\n## Protocols\n- **TCP**: Reliable ordered delivery\n- **UDP**: Fast, no guarantee\n- **IP**: Addressing and routing"
       },
       {
         "filename": "http.md",
-        "frontmatter": { "id": "http", "label": "HTTP", "category": "network", "priority": "high", "status": "mastered", "ease_factor": 2.9, "interval": 30, "relations": [{ "target": "tcpip", "type": "uses", "weight": 0.8 }] },
+        "frontmatter": { "id": "http", "label": "HTTP", "category": "protocole", "priority": "high", "status": "mastered", "ease_factor": 2.9, "interval": 30, "relations": [{ "target": "tcpip", "type": "uses", "weight": 0.8 }] },
         "body": "## What is HTTP?\nHTTP is the application-layer protocol for web data transfer.\n\n## Key Concepts\n- **Methods**: GET POST PUT PATCH DELETE\n- **Status codes**: 2xx 3xx 4xx 5xx\n- **Headers**: Content-Type Authorization Cache-Control\n- **HTTPS**: HTTP over TLS"
       }
     ]

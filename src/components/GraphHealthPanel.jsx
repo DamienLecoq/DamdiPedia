@@ -38,9 +38,10 @@ function DanglingSection({ warnings, fixOne, fixAll }) {
           const relTarget = match?.[1] || '';
           return (
             <div key={i} style={{
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 6, padding: '0.4rem 0.75rem', fontSize: '0.82rem',
+              background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', borderTopColor: 'rgba(255,255,255,0.1)',
+              borderRadius: 12, padding: '0.45rem 0.85rem', fontSize: '0.82rem',
               display: 'flex', alignItems: 'center', gap: '0.75rem',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
             }}>
               <span style={{ color: 'var(--text)' }}>{w.file}</span>
               <span style={{ flex: 1, color: 'var(--text-muted)' }}>— {w.detail}</span>
@@ -66,7 +67,7 @@ function ParseErrorSection({ warnings, rawContentCache }) {
           const raw = rawContentCache?.get(w.file);
           const isOpen = expanded === i;
           return (
-            <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6 }}>
+            <div key={i} style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', borderTopColor: 'rgba(255,255,255,0.1)', borderRadius: 12, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}>
               <div style={{ padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.82rem' }}>
                 <span style={{ color: 'var(--danger)' }}>{w.file}</span>
                 <span style={{ flex: 1, color: 'var(--text-muted)' }}>— {w.detail}</span>
@@ -77,8 +78,8 @@ function ParseErrorSection({ warnings, rawContentCache }) {
               </div>
               {isOpen && (
                 <pre style={{
-                  margin: 0, padding: '0.75rem', borderTop: '1px solid var(--border)',
-                  background: 'var(--bg)', borderRadius: '0 0 6px 6px',
+                  margin: 0, padding: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.06)',
+                  background: 'rgba(0,0,0,0.2)', borderRadius: '0 0 12px 12px',
                   fontSize: '0.75rem', color: 'var(--text-muted)',
                   overflowX: 'auto', maxHeight: 300,
                   fontFamily: "'Cascadia Code','Fira Code','Consolas',monospace",
@@ -104,9 +105,10 @@ function SlugCollisionSection({ warnings, openEditor, nodes }) {
           const node = nodes.find(n => n.id === nodeId);
           return (
             <div key={i} style={{
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 6, padding: '0.4rem 0.75rem', fontSize: '0.82rem',
+              background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', borderTopColor: 'rgba(255,255,255,0.1)',
+              borderRadius: 12, padding: '0.45rem 0.85rem', fontSize: '0.82rem',
               display: 'flex', alignItems: 'center', gap: '0.75rem',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
             }}>
               <span style={{ color: 'var(--text)' }}>{w.file}</span>
               <span style={{ flex: 1, color: 'var(--text-muted)' }}>— {w.detail}</span>
@@ -170,8 +172,9 @@ export default function GraphHealthPanel() {
       {other.map((w, i) => (
         <section key={i} style={{ marginBottom: '1rem' }}>
           <div style={{
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 6, padding: '0.4rem 0.75rem', fontSize: '0.82rem', color: 'var(--text-muted)',
+            background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', borderTopColor: 'rgba(255,255,255,0.1)',
+            borderRadius: 12, padding: '0.45rem 0.85rem', fontSize: '0.82rem', color: 'var(--text-muted)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
           }}>
             {w.type}: {w.detail}
           </div>

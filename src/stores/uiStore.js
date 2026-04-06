@@ -4,7 +4,7 @@ const EDIT_CODE = import.meta.env.VITE_EDIT_PASSWORD || null;
 
 export const useUiStore = create((set, get) => ({
   // State
-  currentView: 'graph',        // 'graph' | 'list' | 'dashboard' | 'health' | 'editor'
+  currentView: 'graph',        // 'graph' | 'list' | 'dashboard' | 'health' | 'editor' | 'exercises'
   graphRenderMode: 'cluster',  // 'cluster' | 'global'
   aiPanelOpen: false,
   contextDepth: 2,
@@ -62,7 +62,13 @@ export const useUiStore = create((set, get) => ({
     }
     return false;
   },
-  lockEdit: () => set({ editUnlocked: false }),
+  lockEdit: () => {
+    const { currentView } = get();
+    set({
+      editUnlocked: false,
+      ...(currentView === 'exercises' ? { currentView: 'graph' } : {}),
+    });
+  },
   openAuthModal: () => set({ showAuthModal: true }),
   closeAuthModal: () => set({ showAuthModal: false }),
 
