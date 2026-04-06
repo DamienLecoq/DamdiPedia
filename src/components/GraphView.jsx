@@ -78,8 +78,6 @@ function GraphInner() {
   const isMobile = useIsMobile();
   const [showCatPanel, setShowCatPanel] = useState(false);
 
-  if (nodes.length === 0) return <EmptyState />;
-
   // Observe container size
   useEffect(() => {
     if (!containerRef.current) return;
@@ -308,6 +306,9 @@ function GraphInner() {
     }
     graphRef.current.zoomToFit(400, 60);
   }, [selectedNodeId, graphData.nodes]);
+
+  // Early return AFTER all hooks to respect Rules of Hooks
+  if (nodes.length === 0) return <EmptyState />;
 
   // ---------------------------------------------------------------------------
   // Category pills for cluster expand
