@@ -4,19 +4,20 @@ label: Docker
 category: logiciel
 priority: high
 status: learning
-createdAt: 2025-01-10T10:00:00Z
-updatedAt: 2025-01-10T10:00:00Z
+last_quiz_score: null
+next_review: null
+ease_factor: 2.5
+interval: 1
+createdAt: 'Fri Jan 10 2025 11:00:00 GMT+0100 (heure normale d’Europe centrale)'
+updatedAt: '2026-04-06T13:35:34.731Z'
 relations:
   - target: kubernetes
     type: depends_on
     weight: 0.9
-  - target: linux
-    type: uses
-    weight: 0.7
 resources:
   - type: documentation
     title: Documentation officielle Docker
-    url: https://docs.docker.com
+    url: 'https://docs.docker.com'
 ---
 
 ## Qu'est-ce que Docker ?
