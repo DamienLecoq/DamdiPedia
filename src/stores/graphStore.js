@@ -54,11 +54,11 @@ export const useGraphStore = create((set, get) => ({
     if (!ghConfigured()) return;
     try {
       const ghFiles = await fetchVaultFiles();
-      if (!Object.keys(ghFiles).length) return;
 
-      // Merge: GitHub is source of truth, localStorage user content fills gaps
+      // Merge: built-in < localStorage < GitHub (source of truth)
+      const builtIn = getGlobalBuiltInFiles();
       const userContent = getGlobalUserContent();
-      const merged = { ...userContent, ...ghFiles };
+      const merged = { ...builtIn, ...userContent, ...ghFiles };
 
       storage.setStorageMode('vault');
       const { nodes: raw, warnings: scanW, rawContentCache } = storage.loadVaultFiles(merged);
