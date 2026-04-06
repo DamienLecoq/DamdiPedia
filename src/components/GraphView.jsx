@@ -307,9 +307,6 @@ function GraphInner() {
     graphRef.current.zoomToFit(400, 60);
   }, [selectedNodeId, graphData.nodes]);
 
-  // Early return AFTER all hooks to respect Rules of Hooks
-  if (nodes.length === 0) return <EmptyState />;
-
   // ---------------------------------------------------------------------------
   // Category pills for cluster expand
   // ---------------------------------------------------------------------------
@@ -322,6 +319,10 @@ function GraphInner() {
       if (graphRenderMode !== 'global') setGraphRenderMode('cluster');
     }
   };
+
+  if (nodes.length === 0) {
+    return <div ref={containerRef} style={{ flex: 1, position: 'relative', overflow: 'hidden' }}><EmptyState /></div>;
+  }
 
   return (
     <div ref={containerRef} style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
