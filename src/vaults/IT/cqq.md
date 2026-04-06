@@ -9,8 +9,11 @@ next_review: null
 ease_factor: 2.5
 interval: 1
 createdAt: '2026-04-06T12:27:42.450Z'
-updatedAt: '2026-04-06T12:29:18.906Z'
+updatedAt: '2026-04-06T12:29:33.750Z'
 relations: []
-resources: []
+resources:
+  - type: documentation
+    title: a
+    url: a
 ---
 zdazdazd
