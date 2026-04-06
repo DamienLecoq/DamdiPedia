@@ -65,6 +65,8 @@ export function loadVaultFiles(files) {
   const rawContentCache = new Map();
 
   for (const [name, text] of Object.entries(files)) {
+    // Skip non-.md files (e.g. exercise .json files)
+    if (!name.endsWith('.md')) continue;
     try {
       const { data, content } = matter(text);
       nodes.push(normalizeNode({ ...data, markdown_body: content, _handle: null, _filename: name }));

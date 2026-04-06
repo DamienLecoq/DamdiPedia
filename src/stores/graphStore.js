@@ -6,6 +6,7 @@ import { saveHandleToIDB } from '../lib/fs.js';
 import { useUiStore } from './uiStore.js';
 import { getGlobalBuiltInFiles, getGlobalUserContent, migrateOldVaultContent } from '../lib/vaultLoader.js';
 import { isConfigured as ghConfigured, fetchVaultFiles } from '../lib/github.js';
+import { syncExercisesFromVault } from '../lib/exercises.js';
 
 export const useGraphStore = create((set, get) => ({
   // ── State ─────────────────────────────────────────────────────────────────
@@ -62,6 +63,7 @@ export const useGraphStore = create((set, get) => ({
 
       storage.setStorageMode('vault');
       const { nodes: raw, warnings: scanW, rawContentCache } = storage.loadVaultFiles(merged);
+      syncExercisesFromVault(merged);
       const { nodes, links, clusters, warnings: graphW } = buildGraph(raw);
       set({
         nodes, links, clusters,
