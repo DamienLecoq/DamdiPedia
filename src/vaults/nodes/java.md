@@ -9,7 +9,7 @@ next_review: null
 ease_factor: 2.5
 interval: 1
 createdAt: '2026-04-10T19:20:36.633Z'
-updatedAt: '2026-04-10T19:29:55.356Z'
+updatedAt: '2026-04-10T19:30:08.581Z'
 relations: []
 resources:
   - type: documentation
@@ -244,5 +244,3 @@ Java compile le code source en bytecode exécuté par la JVM, ce qui permet une 
 - \[PIÈGE\] == vs equals()
 
 - \[PIÈGE\] NullPointerException très fréquente
-
----
