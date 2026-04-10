@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { HashRouter } from 'react-router-dom';
 import { useGraphStore } from './stores/graphStore.js';
 import { useUiStore } from './stores/uiStore.js';
@@ -7,6 +7,7 @@ import { useSingleTabGuard } from './hooks/useSingleTabGuard.js';
 import { useBeforeUnload } from './hooks/useBeforeUnload.js';
 import { useIsMobile } from './hooks/useIsMobile.js';
 import { isConfigured as ghConfigured } from './lib/github.js';
+import matter from './lib/matter.js';
 import GraphView from './components/GraphView.jsx';
 import ScanLoader from './components/ScanLoader.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
@@ -91,11 +92,41 @@ function TopNav({ onShowAuth }) {
   const currentView  = useUiStore(s => s.currentView);
   const setView      = useUiStore(s => s.setView);
   const openEditor   = useUiStore(s => s.openEditor);
+  const openEditorWithImport = useUiStore(s => s.openEditorWithImport);
   const editUnlocked = useUiStore(s => s.editUnlocked);
   const authRequired = useUiStore(s => s.authRequired);
   const lockEdit     = useUiStore(s => s.lockEdit);
+  const addToast     = useUiStore(s => s.addToast);
   const isMobile     = useIsMobile();
   const [mobileSearch, setMobileSearch] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handleImportMd = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const { data, content } = matter(reader.result);
+        openEditorWithImport({
+          label: data.label || file.name.replace(/\.md$/i, ''),
+          category: data.category || 'concept',
+          color: data.color || '',
+          priority: data.priority || 'medium',
+          status: data.status || 'learning',
+          relations: Array.isArray(data.relations) ? data.relations : [],
+          resources: Array.isArray(data.resources) ? data.resources : [],
+          markdown_body: content || '',
+        });
+        addToast(`Fichier "${file.name}" importé. Vérifiez et enregistrez.`, 'info');
+      } catch (err) {
+        console.error('[import]', err);
+        addToast(`Erreur d'import : ${err.message}`, 'error');
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const NavBtn = ({ view, label, icon }) => (
     <button
@@ -148,10 +179,24 @@ function TopNav({ onShowAuth }) {
       )}
 
       {editUnlocked && (
-        <button className="btn-primary" style={{ fontSize: '0.75rem', padding: '0.25rem 0.65rem' }}
-          onClick={() => openEditor(null)}>
-          {isMobile ? '+' : '+ Nouveau'}
-        </button>
+        <>
+          <button className="btn-primary" style={{ fontSize: '0.75rem', padding: '0.25rem 0.65rem' }}
+            onClick={() => openEditor(null)}>
+            {isMobile ? '+' : '+ Nouveau'}
+          </button>
+          <button className="btn-secondary" style={{ fontSize: '0.75rem', padding: '0.25rem 0.65rem' }}
+            onClick={() => fileInputRef.current?.click()}
+            title="Importer un fichier .md">
+            {isMobile ? '📄' : '📄 Importer'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".md"
+            onChange={handleImportMd}
+            style={{ display: 'none' }}
+          />
+        </>
       )}
 
       {warnings.length > 0 && (

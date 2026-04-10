@@ -12,6 +12,7 @@ export const useUiStore = create((set, get) => ({
   editorDirty: false,
   computingLayout: false,
   editingNodeId: undefined,    // undefined = not in editor, null = creating new, string = editing existing
+  importedData: null,          // pre-filled data when importing a .md file
   toasts: [],
   showLinks: true,             // toggle link visibility in graph
   showRelationLabels: false,   // toggle relation type labels on links
@@ -35,13 +36,23 @@ export const useUiStore = create((set, get) => ({
       set({ showAuthModal: true });
       return;
     }
-    set({ editingNodeId: nodeId, currentView: 'editor', editorDirty: false });
+    set({ editingNodeId: nodeId, currentView: 'editor', editorDirty: false, importedData: null });
+  },
+
+  openEditorWithImport: (data) => {
+    const { editUnlocked } = get();
+    if (!editUnlocked) {
+      set({ showAuthModal: true });
+      return;
+    }
+    set({ editingNodeId: null, currentView: 'editor', editorDirty: true, importedData: data });
   },
 
   closeEditor: () => set({
     editingNodeId: undefined,
     currentView: 'graph',
     editorDirty: false,
+    importedData: null,
   }),
 
   // Graph controls

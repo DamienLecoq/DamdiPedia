@@ -95,19 +95,23 @@ export default function EditorView() {
   const closeEditor  = useUiStore(s => s.closeEditor);
   const setEditorDirty = useUiStore(s => s.setEditorDirty);
   const editorDirty  = useUiStore(s => s.editorDirty);
+  const importedData = useUiStore(s => s.importedData);
 
   const isMobile = useIsMobile();
   const isCreating = editingNodeId === null;
   const source = isCreating ? null : nodes.find(n => n.id === editingNodeId);
 
-  const [label,     setLabel]     = useState(source?.label ?? '');
-  const [category,  setCategory]  = useState(source?.category ?? 'concept');
-  const [color,     setColor]     = useState(source?.color ?? '');
-  const [priority,  setPriority]  = useState(source?.priority ?? 'medium');
-  const [status,    setStatus]    = useState(source?.status ?? 'learning');
-  const [relations, setRelations] = useState(source?.relations ? JSON.parse(JSON.stringify(source.relations)) : []);
-  const [resources, setResources] = useState(source?.resources ? JSON.parse(JSON.stringify(source.resources)) : []);
-  const [body,      setBody]      = useState(source?.markdown_body ?? '');
+  // Use importedData (from .md import) as initial values when available, otherwise use source node
+  const init = importedData || source;
+
+  const [label,     setLabel]     = useState(init?.label ?? '');
+  const [category,  setCategory]  = useState(init?.category ?? 'concept');
+  const [color,     setColor]     = useState(init?.color ?? '');
+  const [priority,  setPriority]  = useState(init?.priority ?? 'medium');
+  const [status,    setStatus]    = useState(init?.status ?? 'learning');
+  const [relations, setRelations] = useState(init?.relations ? JSON.parse(JSON.stringify(init.relations)) : []);
+  const [resources, setResources] = useState(init?.resources ? JSON.parse(JSON.stringify(init.resources)) : []);
+  const [body,      setBody]      = useState(init?.markdown_body ?? '');
   const [rawMode,   setRawMode]   = useState(false);
   const rteKey = useRef(0); // increment to remount RichTextEditor with latest body
   const [saving,    setSaving]    = useState(false);
