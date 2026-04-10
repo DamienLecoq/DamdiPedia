@@ -262,11 +262,11 @@ next_review: null
 ease_factor: 2.5
 interval: 1
 createdAt: '2026-04-10T19:20:36.633Z'
-updatedAt: '2026-04-10T19:28:51.552Z'
+updatedAt: '2026-04-10T19:29:10.716Z'
 relations: []
 resources:
   - type: documentation
-    title: Documentation
+    title: Documentation officielle
     url: 'https://docs.oracle.com/en/java/'
   - type: documentation
     title: Tutoriels
