@@ -9,8 +9,11 @@ next_review: null
 ease_factor: 2.5
 interval: 1
 createdAt: '2026-04-11T10:01:48.091Z'
-updatedAt: '2026-04-11T10:11:48.130Z'
+updatedAt: '2026-04-11T10:12:03.715Z'
 relations:
+  - target: java
+    type: uses
+    weight: 0.9
   - target: api-rest
     type: implements
     weight: 0.9
@@ -20,9 +23,6 @@ relations:
   - target: hibernate
     type: uses
     weight: 0.7
-  - target: microservices
-    type: enables
-    weight: 0.8
   - target: docker
     type: deployed_with
     weight: 0.7
