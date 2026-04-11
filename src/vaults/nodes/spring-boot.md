@@ -9,11 +9,8 @@ next_review: null
 ease_factor: 2.5
 interval: 1
 createdAt: '2026-04-11T10:01:48.091Z'
-updatedAt: '2026-04-11T10:01:48.091Z'
+updatedAt: '2026-04-11T10:11:48.130Z'
 relations:
-  - target: java
-    type: uses
-    weight: 0.9
   - target: api-rest
     type: implements
     weight: 0.9
