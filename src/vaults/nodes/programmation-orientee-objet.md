@@ -9,7 +9,7 @@ next_review: null
 ease_factor: 2.5
 interval: 1
 createdAt: '2026-04-11T10:01:29.729Z'
-updatedAt: '2026-04-11T10:01:29.729Z'
+updatedAt: '2026-04-11T10:11:34.543Z'
 relations:
   - target: java
     type: used_by
@@ -23,9 +23,6 @@ relations:
   - target: kotlin
     type: used_by
     weight: 0.8
-  - target: design-patterns
-    type: related
-    weight: 0.9
   - target: solid
     type: related
     weight: 0.9
