@@ -9,14 +9,11 @@ next_review: null
 ease_factor: 2.5
 interval: 1
 createdAt: '2026-04-11T10:01:33.646Z'
-updatedAt: '2026-04-11T10:01:33.646Z'
+updatedAt: '2026-04-11T10:11:41.475Z'
 relations:
   - target: sql
     type: implements
     weight: 0.9
-  - target: hibernate
-    type: used_by
-    weight: 0.6
   - target: docker
     type: deployed_with
     weight: 0.6
