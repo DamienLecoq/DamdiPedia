@@ -122,7 +122,7 @@ export const useGraphStore = create((set, get) => ({
     const { nodes } = get();
     const { addToast } = useUiStore.getState();
 
-    const baseId = slugify(formData.label || 'unnamed');
+    const baseId = formData.id || slugify(formData.label || 'unnamed');
     let id = baseId;
     let suffix = 2;
     const existingIds = new Set(nodes.map(n => n.id));

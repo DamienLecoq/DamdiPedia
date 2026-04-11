@@ -104,6 +104,7 @@ export default function EditorView() {
   // Use importedData (from .md import) as initial values when available, otherwise use source node
   const init = importedData || source;
 
+  const [importedId] = useState(importedData?.id ?? null);
   const [label,     setLabel]     = useState(init?.label ?? '');
   const [category,  setCategory]  = useState(init?.category ?? 'concept');
   const [color,     setColor]     = useState(init?.color ?? '');
@@ -142,6 +143,7 @@ export default function EditorView() {
     setSaveError(null);
     try {
       await saveEditorNode({
+        ...(importedId ? { id: importedId } : {}),
         label: label.trim(),
         category: category.trim() || 'concept',
         color: color.trim() || null,

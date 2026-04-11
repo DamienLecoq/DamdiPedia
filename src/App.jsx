@@ -113,6 +113,7 @@ function TopNav({ onShowAuth }) {
         try {
           const { data, content } = matter(reader.result);
           openEditorWithImport({
+            id: data.id || undefined,
             label: data.label || files[0].name.replace(/\.md$/i, ''),
             category: data.category || 'concept',
             color: data.color || '',
@@ -140,6 +141,7 @@ function TopNav({ onShowAuth }) {
         const text = await file.text();
         const { data, content } = matter(text);
         await createNode({
+          id: data.id || undefined,
           label: data.label || file.name.replace(/\.md$/i, ''),
           category: data.category || 'concept',
           color: data.color || null,
