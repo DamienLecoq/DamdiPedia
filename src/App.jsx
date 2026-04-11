@@ -101,31 +101,61 @@ function TopNav({ onShowAuth }) {
   const [mobileSearch, setMobileSearch] = useState(false);
   const fileInputRef = useRef(null);
 
-  const handleImportMd = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleImportMd = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
     e.target.value = '';
-    const reader = new FileReader();
-    reader.onload = () => {
+
+    // Single file → open editor pre-filled
+    if (files.length === 1) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const { data, content } = matter(reader.result);
+          openEditorWithImport({
+            label: data.label || files[0].name.replace(/\.md$/i, ''),
+            category: data.category || 'concept',
+            color: data.color || '',
+            priority: data.priority || 'medium',
+            status: data.status || 'learning',
+            relations: Array.isArray(data.relations) ? data.relations : [],
+            resources: Array.isArray(data.resources) ? data.resources : [],
+            markdown_body: content || '',
+          });
+          addToast(`Fichier importé. Vérifiez et enregistrez.`, 'info');
+        } catch (err) {
+          console.error('[import]', err);
+          addToast(`Erreur d'import : ${err.message}`, 'error');
+        }
+      };
+      reader.readAsText(files[0]);
+      return;
+    }
+
+    // Multiple files → create nodes directly
+    const createNode = useGraphStore.getState().createNode;
+    let ok = 0, fail = 0;
+    for (const file of files) {
       try {
-        const { data, content } = matter(reader.result);
-        openEditorWithImport({
+        const text = await file.text();
+        const { data, content } = matter(text);
+        await createNode({
           label: data.label || file.name.replace(/\.md$/i, ''),
           category: data.category || 'concept',
-          color: data.color || '',
+          color: data.color || null,
           priority: data.priority || 'medium',
           status: data.status || 'learning',
           relations: Array.isArray(data.relations) ? data.relations : [],
           resources: Array.isArray(data.resources) ? data.resources : [],
           markdown_body: content || '',
         });
-        addToast(`Fichier "${file.name}" importé. Vérifiez et enregistrez.`, 'info');
+        ok++;
       } catch (err) {
-        console.error('[import]', err);
-        addToast(`Erreur d'import : ${err.message}`, 'error');
+        console.error('[import]', file.name, err);
+        fail++;
       }
-    };
-    reader.readAsText(file);
+    }
+    addToast(`${ok} nœud${ok > 1 ? 's' : ''} importé${ok > 1 ? 's' : ''}${fail ? `, ${fail} erreur${fail > 1 ? 's' : ''}` : ''}.`, fail ? 'warning' : 'success');
   };
 
   const NavBtn = ({ view, label, icon }) => (
@@ -193,6 +223,7 @@ function TopNav({ onShowAuth }) {
             ref={fileInputRef}
             type="file"
             accept=".md"
+            multiple
             onChange={handleImportMd}
             style={{ display: 'none' }}
           />

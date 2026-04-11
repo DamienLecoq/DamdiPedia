@@ -76,8 +76,14 @@ function GraphInner() {
   const showRelationLabels = useUiStore(s => s.showRelationLabels);
   const toggleShowRelationLabels = useUiStore(s => s.toggleShowRelationLabels);
 
+  const editUnlocked = useUiStore(s => s.editUnlocked);
+  const addRelation = useGraphStore(s => s.addRelation);
+  const addToast = useUiStore(s => s.addToast);
+
   const isMobile = useIsMobile();
   const [showCatPanel, setShowCatPanel] = useState(false);
+  const [linkMode, setLinkMode] = useState(false);
+  const [linkSource, setLinkSource] = useState(null);
 
   // Configure d3 forces for better spacing
   useEffect(() => {
@@ -185,8 +191,23 @@ function GraphInner() {
   const handleNodeClick = useCallback((node) => {
     const { quizState } = useAiStore.getState();
     if (quizState && !quizState.completed) return;
+
+    if (linkMode) {
+      if (!linkSource) {
+        setLinkSource(node.id);
+        addToast(`Source : ${node.label}. Cliquez sur le nœud cible.`, 'info');
+      } else if (node.id === linkSource) {
+        setLinkSource(null);
+        addToast('Sélection annulée.', 'info');
+      } else {
+        addRelation(linkSource, node.id);
+        setLinkSource(null);
+      }
+      return;
+    }
+
     selectNode(node.id);
-  }, [selectNode]);
+  }, [selectNode, linkMode, linkSource, addRelation, addToast]);
 
   // ---------------------------------------------------------------------------
   // Node canvas painter — brain/neural aesthetic with glow
@@ -195,14 +216,15 @@ function GraphInner() {
     const color = getNodeColor(node);
     const isSelected = node.id === selectedNodeId;
     const isHovered = node.id === hoveredId;
-    const isDimmed = (hoveredId || selectedNodeId) && node.id !== hoveredId && node.id !== selectedNodeId;
+    const isLinkSource = linkMode && node.id === linkSource;
+    const isDimmed = (hoveredId || selectedNodeId) && node.id !== hoveredId && node.id !== selectedNodeId && !isLinkSource;
 
-    const r = isHovered ? 7 : 5.5;
+    const r = isLinkSource ? 8 : isHovered ? 7 : 5.5;
     ctx.globalAlpha = isDimmed ? 0.15 : 1;
 
     // Outer glow (brain neuron effect)
-    ctx.shadowColor = color;
-    ctx.shadowBlur = isSelected ? 24 : isHovered ? 16 : 10;
+    ctx.shadowColor = isLinkSource ? '#00ff88' : color;
+    ctx.shadowBlur = isLinkSource ? 28 : isSelected ? 24 : isHovered ? 16 : 10;
 
     ctx.beginPath();
     ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
@@ -225,7 +247,7 @@ function GraphInner() {
     ctx.fillStyle = isDimmed ? 'rgba(180,200,255,0.15)' : 'rgba(220,235,255,0.9)';
     ctx.textAlign = 'center';
     ctx.fillText(node.label, node.x, node.y + r + fontSize + 1);
-  }, [selectedNodeId, hoveredId]);
+  }, [selectedNodeId, hoveredId, linkMode, linkSource]);
 
   // ---------------------------------------------------------------------------
   // Link canvas painter — neural synapse style with glow
@@ -379,6 +401,22 @@ function GraphInner() {
           {isMobile ? '✦' : '✦ Types'}
         </button>
 
+        {editUnlocked && (
+          <button
+            onClick={() => { setLinkMode(m => !m); setLinkSource(null); }}
+            className="btn-secondary"
+            style={{
+              fontSize: '0.72rem', padding: isMobile ? '0.3rem 0.5rem' : '0.25rem 0.65rem',
+              borderColor: linkMode ? 'var(--success)' : 'var(--border)',
+              color: linkMode ? 'var(--success)' : 'var(--text-muted)',
+              background: linkMode ? 'rgba(52, 211, 153, 0.1)' : undefined,
+            }}
+            title={linkMode ? 'Désactiver le mode liaison' : 'Activer le mode liaison'}
+          >
+            {isMobile ? '🔗' : '🔗 Lier'}
+          </button>
+        )}
+
         {/* Mobile: toggle category panel */}
         {isMobile && graphRenderMode !== 'global' && clusters.length > 0 && (
           <button
@@ -490,6 +528,23 @@ function GraphInner() {
       >
         {isMobile ? '⊙' : `⊙ ${selectedNodeId ? 'Centrer sur le nœud' : 'Recadrer'}`}
       </button>
+
+      {/* Link mode indicator */}
+      {linkMode && (
+        <div style={{
+          position: 'absolute', top: isMobile ? 8 : 12, right: isMobile ? 8 : 12, zIndex: 10,
+          background: 'rgba(52, 211, 153, 0.1)', border: '1px solid var(--success)',
+          borderRadius: 6, padding: '6px 12px', fontSize: '0.76rem', color: 'var(--success)',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span>{linkSource
+            ? `Source : ${nodes.find(n => n.id === linkSource)?.label || linkSource} — cliquez sur la cible`
+            : 'Cliquez sur le nœud source'
+          }</span>
+          <button onClick={() => { setLinkMode(false); setLinkSource(null); }}
+            style={{ background: 'none', border: 'none', color: 'var(--success)', cursor: 'pointer', fontSize: '0.8rem', padding: 0 }}>✕</button>
+        </div>
+      )}
 
       {/* Truncation warning */}
       {truncated && (

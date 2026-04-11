@@ -25,13 +25,46 @@ export default function ListView() {
   const clusters       = useGraphStore(s => s.clusters);
   const selectNode     = useGraphStore(s => s.selectNode);
   const selectedNodeId = useGraphStore(s => s.selectedNodeId);
+  const deleteNode     = useGraphStore(s => s.deleteNode);
   const openEditor = useUiStore(s => s.openEditor);
   const editUnlocked = useUiStore(s => s.editUnlocked);
+  const addToast = useUiStore(s => s.addToast);
   const isMobile = useIsMobile();
 
   const [sortKey,      setSortKey]      = useState('label');
   const [sortDir,      setSortDir]      = useState(1);
   const [filterCat,    setFilterCat]    = useState(null);
+  const [selected,     setSelected]     = useState(new Set());
+  const [deleting,     setDeleting]     = useState(false);
+
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.size === sorted.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(sorted.map(n => n.id)));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (!selected.size) return;
+    if (!window.confirm(`Supprimer ${selected.size} nœud${selected.size > 1 ? 's' : ''} ? Cette action est irréversible.`)) return;
+    setDeleting(true);
+    let ok = 0, fail = 0;
+    for (const id of selected) {
+      try { await deleteNode(id); ok++; } catch { fail++; }
+    }
+    setSelected(new Set());
+    setDeleting(false);
+    addToast(`${ok} supprimé${ok > 1 ? 's' : ''}${fail ? `, ${fail} erreur${fail > 1 ? 's' : ''}` : ''}.`, fail ? 'warning' : 'success');
+  };
 
   const handleColClick = (key) => {
     if (sortKey === key) setSortDir(d => -d);
@@ -91,6 +124,12 @@ export default function ListView() {
           {filterCat ? `${filterCat} (${filtered.length})` : `${nodes.length} nœud${nodes.length !== 1 ? 's' : ''}`}
         </span>
         <span style={{ flex: 1 }} />
+        {editUnlocked && selected.size > 0 && (
+          <button className="btn-danger" style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
+            onClick={handleDeleteSelected} disabled={deleting}>
+            {deleting ? 'Suppression…' : `Supprimer (${selected.size})`}
+          </button>
+        )}
         {editUnlocked && (
           <button className="btn-primary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
             onClick={() => openEditor(null)}>
@@ -151,6 +190,7 @@ export default function ListView() {
               const isOverdue = node.next_review && node.next_review <= today;
               const color = getNodeColor(node);
               const isSelected = node.id === selectedNodeId;
+              const isChecked = selected.has(node.id);
               return (
                 <div
                   key={node.id}
@@ -167,6 +207,12 @@ export default function ListView() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.35rem' }}>
+                    {editUnlocked && (
+                      <input type="checkbox" checked={isChecked}
+                        onChange={(e) => { e.stopPropagation(); toggleSelect(node.id); }}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ cursor: 'pointer', accentColor: 'var(--accent)' }} />
+                    )}
                     <div style={{ width: 9, height: 9, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 4px ${color}` }} />
                     <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text)', flex: 1 }}>{node.label}</span>
                     {editUnlocked && (
@@ -196,6 +242,14 @@ export default function ListView() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
             <thead style={{ position: 'sticky', top: 0, background: 'linear-gradient(180deg, rgba(20,16,42,0.95) 0%, rgba(16,12,36,0.9) 100%)', backdropFilter: 'blur(20px)', zIndex: 1 }}>
               <tr>
+                {editUnlocked && (
+                  <th style={{ padding: '0.5rem 0.5rem', borderBottom: '1px solid var(--border)', width: 32 }}>
+                    <input type="checkbox"
+                      checked={selected.size === sorted.length && sorted.length > 0}
+                      onChange={toggleSelectAll}
+                      style={{ cursor: 'pointer', accentColor: 'var(--accent)' }} />
+                  </th>
+                )}
                 {COL_DEFS.map(col => (
                   <th
                     key={col.key}
@@ -220,6 +274,7 @@ export default function ListView() {
                 const isOverdue = node.next_review && node.next_review <= today;
                 const color = getNodeColor(node);
                 const isSelected = node.id === selectedNodeId;
+                const isChecked = selected.has(node.id);
                 return (
                   <tr
                     key={node.id}
@@ -228,6 +283,14 @@ export default function ListView() {
                     onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--surface2)'; }}
                     onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                   >
+                    {editUnlocked && (
+                      <td style={{ padding: '0.45rem 0.5rem', borderBottom: '1px solid var(--border)', width: 32 }}>
+                        <input type="checkbox" checked={isChecked}
+                          onChange={() => toggleSelect(node.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ cursor: 'pointer', accentColor: 'var(--accent)' }} />
+                      </td>
+                    )}
                     <td style={{ padding: '0.45rem 0.75rem', borderBottom: '1px solid var(--border)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 4px ${color}` }} />

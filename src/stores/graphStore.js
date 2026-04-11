@@ -242,6 +242,26 @@ export const useGraphStore = create((set, get) => ({
     addToast(`Node deleted.`, 'success');
   },
 
+  // ── addRelation — add a relation between two existing nodes ───────────────
+  addRelation: async (sourceId, targetId, type = 'related', weight = 0.5) => {
+    const { nodes } = get();
+    const { addToast } = useUiStore.getState();
+    const node = nodes.find(n => n.id === sourceId);
+    if (!node) return;
+    if (node.relations.some(r => r.target === targetId)) {
+      addToast('Cette relation existe déjà.', 'warning');
+      return;
+    }
+    const updated = {
+      ...node,
+      relations: [...node.relations, { target: targetId, type, weight }],
+      updatedAt: new Date().toISOString(),
+    };
+    await storage.writeNode(updated);
+    get().updateNodeInMemory(updated);
+    addToast(`Relation ajoutée : ${node.label} → ${nodes.find(n => n.id === targetId)?.label || targetId}`, 'success');
+  },
+
   // ── fixDanglingRelation — remove one broken relation ──────────────────────
   fixDanglingRelation: async (nodeId, relTarget) => {
     const { nodes, warnings } = get();
