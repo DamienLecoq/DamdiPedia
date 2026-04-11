@@ -9,14 +9,11 @@ next_review: null
 ease_factor: 2.5
 interval: 1
 createdAt: '2026-04-11T14:14:44.215Z'
-updatedAt: '2026-04-11T14:15:05.868Z'
+updatedAt: '2026-04-11T14:15:43.490Z'
 relations:
   - target: linux
     type: related
     weight: 0.7
-  - target: json
-    type: related
-    weight: 0.5
 resources:
   - type: documentation
     title: Documentation officielle Git
