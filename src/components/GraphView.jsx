@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
+import { forceCollide as d3ForceCollide } from 'd3-force';
 import GraphErrorBoundary from './GraphErrorBoundary.jsx';
 import { useGraphStore } from '../stores/graphStore.js';
 import { useUiStore } from '../stores/uiStore.js';
@@ -77,6 +78,14 @@ function GraphInner() {
 
   const isMobile = useIsMobile();
   const [showCatPanel, setShowCatPanel] = useState(false);
+
+  // Configure d3 forces for better spacing
+  useEffect(() => {
+    if (!graphRef.current) return;
+    graphRef.current.d3Force('charge').strength(-260);
+    graphRef.current.d3Force('link').distance(120);
+    graphRef.current.d3Force('collision', d3ForceCollide(35));
+  }, []);
 
   // Observe container size
   useEffect(() => {
@@ -249,11 +258,11 @@ function GraphInner() {
     const my = (src.y + tgt.y) / 2;
 
     ctx.save();
-    ctx.globalAlpha = isDimmed ? 0.03 : isHighlighted ? Math.min(w * 0.5 + 0.35, 0.9) : w * 0.22 + 0.07;
+    ctx.globalAlpha = isDimmed ? 0.02 : isHighlighted ? Math.min(w * 0.45 + 0.35, 0.85) : w * 0.12 + 0.04;
     ctx.strokeStyle = isHighlighted ? '#b07fff' : '#7c4dff';
-    ctx.lineWidth = isHighlighted ? w * 1.5 + 0.6 : w * 0.9 + 0.3;
+    ctx.lineWidth = isHighlighted ? w * 1.2 + 0.5 : w * 0.6 + 0.15;
     ctx.shadowColor = '#9c6fff';
-    ctx.shadowBlur = isDimmed ? 0 : isHighlighted ? 14 : 4;
+    ctx.shadowBlur = isDimmed ? 0 : isHighlighted ? 12 : 2;
 
     ctx.beginPath();
     ctx.moveTo(src.x, src.y);

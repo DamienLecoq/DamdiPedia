@@ -184,10 +184,10 @@ export function computeStaticForceLayout(nodes, links, onComplete) {
 
   const run = () => {
     const sim = d3.forceSimulation(simNodes)
-      .force('link', d3.forceLink(simLinks).id(d => d.id).distance(80))
-      .force('charge', d3.forceManyBody().strength(-120))
+      .force('link', d3.forceLink(simLinks).id(d => d.id).distance(120))
+      .force('charge', d3.forceManyBody().strength(-260))
       .force('center', d3.forceCenter(0, 0))
-      .force('collision', d3.forceCollide(20))
+      .force('collision', d3.forceCollide(35))
       .stop();
     for (let i = 0; i < TICKS; i++) sim.tick();
     const positions = new Map();
