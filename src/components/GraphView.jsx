@@ -87,6 +87,8 @@ function GraphInner() {
   const [linkMode, setLinkMode] = useState(false);
   const [linkSource, setLinkSource] = useState(null);
   const [focusedId, setFocusedId] = useState(null);
+  // Accumulates label bounding rects for the current frame to avoid overlap
+  const labelRectsRef = useRef([]);
 
   // Configure d3 forces for better spacing
   useEffect(() => {
@@ -170,10 +172,34 @@ function GraphInner() {
   }, [graphRenderMode, globalLayoutCache]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------------------
-  // Build graph data
+  // Degree + neighbor maps — computed once per visible graph (used by
+  // paintNode, paintLink AND graphData sort for priority label painting)
+  // ---------------------------------------------------------------------------
+  const { degreeMap, neighborMap, maxDegree } = React.useMemo(() => {
+    const deg = new Map();
+    const neigh = new Map();
+    visibleNodes.forEach(n => { deg.set(n.id, 0); neigh.set(n.id, new Set()); });
+    visibleLinks.forEach(l => {
+      const s = typeof l.source === 'object' ? l.source?.id : l.source;
+      const t = typeof l.target === 'object' ? l.target?.id : l.target;
+      if (deg.has(s)) deg.set(s, deg.get(s) + 1);
+      if (deg.has(t)) deg.set(t, deg.get(t) + 1);
+      if (neigh.has(s) && t != null) neigh.get(s).add(t);
+      if (neigh.has(t) && s != null) neigh.get(t).add(s);
+    });
+    let max = 0;
+    deg.forEach(v => { if (v > max) max = v; });
+    return { degreeMap: deg, neighborMap: neigh, maxDegree: max };
+  }, [visibleNodes, visibleLinks]);
+
+  // ---------------------------------------------------------------------------
+  // Build graph data — nodes sorted by degree desc so hubs paint first and
+  // reserve label slots before lesser nodes
   // ---------------------------------------------------------------------------
   const graphData = React.useMemo(() => {
-    let gNodes = visibleNodes.map(n => ({ ...n }));
+    let gNodes = visibleNodes
+      .map(n => ({ ...n }))
+      .sort((a, b) => (degreeMap.get(b.id) || 0) - (degreeMap.get(a.id) || 0));
     if (graphRenderMode === 'global' && globalLayoutCache) {
       gNodes = gNodes.map(n => {
         const pos = globalLayoutCache.positions.get(n.id);
@@ -182,7 +208,7 @@ function GraphInner() {
     }
     // Deep-copy links so force-graph mutation doesn't affect the store's array
     return { nodes: gNodes, links: visibleLinks.map(l => ({ ...l })) };
-  }, [visibleNodes, visibleLinks, graphRenderMode, globalLayoutCache]);
+  }, [visibleNodes, visibleLinks, graphRenderMode, globalLayoutCache, degreeMap]);
 
   // Pre-compute bidirectional link set — links whose reverse also exists
   // Key format: "srcId->tgtId"
@@ -210,26 +236,6 @@ function GraphInner() {
     });
     return map;
   }, [graphData.links]);
-
-  // ---------------------------------------------------------------------------
-  // Degree + neighbor maps — computed once per visible graph
-  // ---------------------------------------------------------------------------
-  const { degreeMap, neighborMap, maxDegree } = React.useMemo(() => {
-    const deg = new Map();
-    const neigh = new Map();
-    visibleNodes.forEach(n => { deg.set(n.id, 0); neigh.set(n.id, new Set()); });
-    visibleLinks.forEach(l => {
-      const s = typeof l.source === 'object' ? l.source?.id : l.source;
-      const t = typeof l.target === 'object' ? l.target?.id : l.target;
-      if (deg.has(s)) deg.set(s, deg.get(s) + 1);
-      if (deg.has(t)) deg.set(t, deg.get(t) + 1);
-      if (neigh.has(s) && t != null) neigh.get(s).add(t);
-      if (neigh.has(t) && s != null) neigh.get(t).add(s);
-    });
-    let max = 0;
-    deg.forEach(v => { if (v > max) max = v; });
-    return { degreeMap: deg, neighborMap: neigh, maxDegree: max };
-  }, [visibleNodes, visibleLinks]);
 
   // ---------------------------------------------------------------------------
   // Node click — quiz guard, then select
@@ -323,8 +329,13 @@ function GraphInner() {
     ctx.fillStyle = color;
     ctx.fill();
 
-    // Bright core
+    // Thin white ring — detaches the node from the colored halo backdrop
     ctx.shadowBlur = 0;
+    ctx.strokeStyle = `rgba(255,255,255,${0.45 * baseAlpha})`;
+    ctx.lineWidth = Math.max(0.4, 0.7 / globalScale);
+    ctx.stroke();
+
+    // Bright core
     ctx.beginPath();
     ctx.arc(node.x, node.y, r * 0.38, 0, 2 * Math.PI);
     ctx.fillStyle = 'rgba(255,255,255,0.75)';
@@ -334,8 +345,9 @@ function GraphInner() {
 
     // Label — conditional visibility
     // Show when: hovered/selected/linkSource, neighbor of active, zoomed-in enough,
-    // or high-degree "hub" node (macro-level importance)
-    const isHub = maxDegree > 0 && degree >= Math.max(4, maxDegree * 0.55);
+    // or high-degree "hub" node (macro-level importance — threshold aligned
+    // with the progressive-disclosure hub threshold so painted hubs always label)
+    const isHub = maxDegree > 0 && degree >= Math.max(3, maxDegree * 0.35);
     const zoomedIn = globalScale >= 1.6;
     const showLabel = isHovered || isSelected || isLinkSource
       || isNeighbor
@@ -345,22 +357,45 @@ function GraphInner() {
     if (showLabel) {
       const fontSize = Math.max(10 / globalScale, 3);
       ctx.font = `${fontSize}px sans-serif`;
-      const labelAlpha = isHovered || isSelected || isLinkSource
-        ? 1
-        : isNeighbor ? 0.9
-        : isHub && !activeId ? 0.55
-        : 0.75;
-      ctx.globalAlpha = baseAlpha * labelAlpha;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'alphabetic';
+      const labelWidth = ctx.measureText(node.label).width;
       const ly = node.y + r + fontSize + 1;
-      // Dark outline for contrast over any background
-      ctx.lineWidth = Math.max(1.5, fontSize * 0.3);
-      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-      ctx.lineJoin = 'round';
-      ctx.strokeText(node.label, node.x, ly);
-      ctx.fillStyle = 'rgba(235,245,255,0.98)';
-      ctx.fillText(node.label, node.x, ly);
+      const rectX = node.x - labelWidth / 2 - 1;
+      const rectY = ly - fontSize;
+      const rectW = labelWidth + 2;
+      const rectH = fontSize + 2;
+
+      // Anti-overlap: skip passive labels that collide with an already-painted one
+      const forceShow = isHovered || isSelected || isLinkSource || isFocused;
+      const rects = labelRectsRef.current;
+      let collides = false;
+      if (!forceShow) {
+        for (const rr of rects) {
+          if (rectX < rr.x + rr.w && rectX + rectW > rr.x &&
+              rectY < rr.y + rr.h && rectY + rectH > rr.y) {
+            collides = true;
+            break;
+          }
+        }
+      }
+
+      if (!collides) {
+        rects.push({ x: rectX, y: rectY, w: rectW, h: rectH });
+
+        const labelAlpha = forceShow ? 1
+          : isNeighbor ? 0.9
+          : isHub && !activeId ? 0.7
+          : 0.75;
+        ctx.globalAlpha = baseAlpha * labelAlpha;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        // Dark outline for contrast over any background
+        ctx.lineWidth = Math.max(1.5, fontSize * 0.3);
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.lineJoin = 'round';
+        ctx.strokeText(node.label, node.x, ly);
+        ctx.fillStyle = 'rgba(235,245,255,0.98)';
+        ctx.fillText(node.label, node.x, ly);
+      }
     }
 
     ctx.globalAlpha = 1;
@@ -393,6 +428,15 @@ function GraphInner() {
     const w = link.weight || 1;
     const isInterCat = src.category && tgt.category && src.category !== tgt.category;
 
+    // Curved link — quadratic bezier, control point offset perpendicular to
+    // the chord. Inter-category links curve more to visually separate them
+    // from the straight spaghetti of intra-cat links.
+    const dx = tgt.x - src.x;
+    const dy = tgt.y - src.y;
+    const curvature = isInterCat ? 0.18 : 0.12;
+    const cpx = (src.x + tgt.x) / 2 + dy * curvature;
+    const cpy = (src.y + tgt.y) / 2 - dx * curvature;
+
     // Progressive disclosure — fade links whose endpoints are both non-hubs at low zoom
     const srcDeg = degreeMap.get(srcId) || 0;
     const tgtDeg = degreeMap.get(tgtId) || 0;
@@ -408,8 +452,9 @@ function GraphInner() {
     }
     if (zoomAlpha <= 0.02) return;
 
-    const mx = (src.x + tgt.x) / 2;
-    const my = (src.y + tgt.y) / 2;
+    // Curve midpoint at t=0.5 of a quadratic bezier: (P0 + 2*CP + P2) / 4
+    const mx = (src.x + 2 * cpx + tgt.x) / 4;
+    const my = (src.y + 2 * cpy + tgt.y) / 4;
 
     ctx.save();
     // Opacity: inter-category links get a stronger baseline (structurally informative)
@@ -442,7 +487,7 @@ function GraphInner() {
 
     ctx.beginPath();
     ctx.moveTo(src.x, src.y);
-    ctx.lineTo(tgt.x, tgt.y);
+    ctx.quadraticCurveTo(cpx, cpy, tgt.x, tgt.y);
     ctx.stroke();
 
     // Relation labels
@@ -477,6 +522,8 @@ function GraphInner() {
   // Runs every frame BEFORE nodes/links, reads live positions from graphData.nodes
   // ---------------------------------------------------------------------------
   const onRenderFramePre = useCallback((ctx, globalScale) => {
+    // Reset per-frame label occupancy — paintNode pushes rects as it paints
+    labelRectsRef.current = [];
     if (!graphData.nodes.length) return;
     // Aggregate per-category live stats
     const stats = new Map();
