@@ -91,7 +91,7 @@ function GraphInner() {
   // Configure d3 forces for better spacing
   useEffect(() => {
     if (!graphRef.current) return;
-    graphRef.current.d3Force('charge').strength(-260);
+    graphRef.current.d3Force('charge').strength(-340);
     graphRef.current.d3Force('link').distance(120);
     graphRef.current.d3Force('collision', d3ForceCollide(35));
   }, []);
@@ -151,8 +151,8 @@ function GraphInner() {
     }
     const getX = (n) => categoryAnchors.get(n.category)?.x || 0;
     const getY = (n) => categoryAnchors.get(n.category)?.y || 0;
-    graphRef.current.d3Force('clusterX', d3ForceX(getX).strength(0.09));
-    graphRef.current.d3Force('clusterY', d3ForceY(getY).strength(0.09));
+    graphRef.current.d3Force('clusterX', d3ForceX(getX).strength(0.13));
+    graphRef.current.d3Force('clusterY', d3ForceY(getY).strength(0.13));
     graphRef.current.d3ReheatSimulation?.();
   }, [categoryAnchors, graphRenderMode]);
 
@@ -295,9 +295,23 @@ function GraphInner() {
     const baseR = Math.min(11, 3.2 + Math.sqrt(degree) * 1.15);
     const r = isFocused ? baseR + 2.5 : isLinkSource ? baseR + 3 : isHovered ? baseR + 1.6 : baseR;
 
+    // Progressive disclosure — at low zoom, only hubs are visible
+    // Smooth fade between zoomFadeStart and zoomFadeEnd for non-hubs
+    const hubThreshold = Math.max(3, maxDegree * 0.35);
+    const isHubLocal = degree >= hubThreshold;
+    let zoomAlpha = 1;
+    if (!isHubLocal && !isActive) {
+      const zoomFadeStart = 0.35;
+      const zoomFadeEnd = 0.95;
+      if (globalScale <= zoomFadeStart) zoomAlpha = 0;
+      else if (globalScale >= zoomFadeEnd) zoomAlpha = 1;
+      else zoomAlpha = (globalScale - zoomFadeStart) / (zoomFadeEnd - zoomFadeStart);
+    }
+    if (zoomAlpha <= 0.02) return;
+
     // Baseline opacity: focus mode dims non-subgraph much more than hover alone
     const dimLevel = focusedId ? 0.03 : 0.08;
-    const baseAlpha = activeId ? (isActive ? 1 : dimLevel) : 0.78;
+    const baseAlpha = (activeId ? (isActive ? 1 : dimLevel) : 0.78) * zoomAlpha;
     ctx.globalAlpha = baseAlpha;
 
     // Outer glow — reserved for interactive/active states
@@ -337,9 +351,16 @@ function GraphInner() {
         : isHub && !activeId ? 0.55
         : 0.75;
       ctx.globalAlpha = baseAlpha * labelAlpha;
-      ctx.fillStyle = 'rgba(220,235,255,0.95)';
       ctx.textAlign = 'center';
-      ctx.fillText(node.label, node.x, node.y + r + fontSize + 1);
+      ctx.textBaseline = 'alphabetic';
+      const ly = node.y + r + fontSize + 1;
+      // Dark outline for contrast over any background
+      ctx.lineWidth = Math.max(1.5, fontSize * 0.3);
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.lineJoin = 'round';
+      ctx.strokeText(node.label, node.x, ly);
+      ctx.fillStyle = 'rgba(235,245,255,0.98)';
+      ctx.fillText(node.label, node.x, ly);
     }
 
     ctx.globalAlpha = 1;
@@ -372,18 +393,34 @@ function GraphInner() {
     const w = link.weight || 1;
     const isInterCat = src.category && tgt.category && src.category !== tgt.category;
 
+    // Progressive disclosure — fade links whose endpoints are both non-hubs at low zoom
+    const srcDeg = degreeMap.get(srcId) || 0;
+    const tgtDeg = degreeMap.get(tgtId) || 0;
+    const hubThreshold = Math.max(3, maxDegree * 0.35);
+    const endpointVisible = srcDeg >= hubThreshold || tgtDeg >= hubThreshold;
+    let zoomAlpha = 1;
+    if (!endpointVisible && !touchesActive) {
+      const zoomFadeStart = 0.35;
+      const zoomFadeEnd = 0.95;
+      if (globalScale <= zoomFadeStart) zoomAlpha = 0;
+      else if (globalScale >= zoomFadeEnd) zoomAlpha = 1;
+      else zoomAlpha = (globalScale - zoomFadeStart) / (zoomFadeEnd - zoomFadeStart);
+    }
+    if (zoomAlpha <= 0.02) return;
+
     const mx = (src.x + tgt.x) / 2;
     const my = (src.y + tgt.y) / 2;
 
     ctx.save();
     // Opacity: inter-category links get a stronger baseline (structurally informative)
-    ctx.globalAlpha = isDimmed
+    const rawAlpha = isDimmed
       ? (focusedId ? 0.008 : 0.015)
       : isHighlighted
         ? Math.min(w * 0.5 + 0.5, 0.98)
         : isInterCat
           ? Math.min(w * 0.15 + 0.38, 0.65)
           : w * 0.08 + 0.025;
+    ctx.globalAlpha = rawAlpha * zoomAlpha;
 
     // Stroke: gradient src→tgt category colors for inter-cat links, purple otherwise
     if (isInterCat && !isDimmed) {
@@ -433,7 +470,63 @@ function GraphInner() {
     }
 
     ctx.restore();
-  }, [hoveredId, selectedNodeId, focusedId, showLinks, showRelationLabels, biDirSet, biDirTypeMap]);
+  }, [hoveredId, selectedNodeId, focusedId, showLinks, showRelationLabels, biDirSet, biDirTypeMap, degreeMap, maxDegree]);
+
+  // ---------------------------------------------------------------------------
+  // Background pre-render — category halos + faint watermark labels
+  // Runs every frame BEFORE nodes/links, reads live positions from graphData.nodes
+  // ---------------------------------------------------------------------------
+  const onRenderFramePre = useCallback((ctx, globalScale) => {
+    if (!graphData.nodes.length) return;
+    // Aggregate per-category live stats
+    const stats = new Map();
+    graphData.nodes.forEach(n => {
+      if (n.x == null || n.y == null || !n.category) return;
+      let s = stats.get(n.category);
+      if (!s) {
+        s = { sumX: 0, sumY: 0, count: 0, members: [] };
+        stats.set(n.category, s);
+      }
+      s.sumX += n.x;
+      s.sumY += n.y;
+      s.count += 1;
+      s.members.push(n);
+    });
+
+    stats.forEach((s, cat) => {
+      const cx = s.sumX / s.count;
+      const cy = s.sumY / s.count;
+      let maxR = 0;
+      for (const n of s.members) {
+        const dx = n.x - cx;
+        const dy = n.y - cy;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d > maxR) maxR = d;
+      }
+      const haloR = Math.max(50, maxR + 32);
+      const color = getNodeColor({ category: cat });
+
+      // Radial-gradient halo
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, haloR);
+      grad.addColorStop(0, color + '33');   // ~20%
+      grad.addColorStop(0.55, color + '15'); // ~8%
+      grad.addColorStop(1, color + '00');   // 0%
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, haloR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Watermark label — centered, faint, scales with zoom
+      const fontSize = Math.max(16 / globalScale, 9);
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.globalAlpha = focusedId ? 0.08 : 0.22;
+      ctx.fillStyle = color;
+      ctx.fillText(cat.toUpperCase(), cx, cy);
+      ctx.globalAlpha = 1;
+    });
+  }, [graphData.nodes, focusedId]);
 
   const isStaticMode = graphRenderMode === 'global' && !!globalLayoutCache;
 
@@ -730,6 +823,7 @@ function GraphInner() {
         graphData={graphData}
         width={dimensions.width}
         height={dimensions.height}
+        onRenderFramePre={onRenderFramePre}
         nodeCanvasObject={paintNode}
         nodeCanvasObjectMode={() => 'replace'}
         linkCanvasObjectMode={() => 'replace'}
