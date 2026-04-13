@@ -16,6 +16,7 @@ export const useUiStore = create((set, get) => ({
   toasts: [],
   showLinks: true,             // toggle link visibility in graph
   showRelationLabels: false,   // toggle relation type labels on links
+  maxDisplayNodes: 150,        // max nodes to render in the graph (user-configurable)
   showAuthModal: false,        // show auth unlock modal
   // Auth: unlocked when no password set, locked otherwise
   editUnlocked: !EDIT_CODE,
@@ -64,6 +65,7 @@ export const useUiStore = create((set, get) => ({
   setComputingLayout: (computing) => set({ computingLayout: computing }),
   toggleShowLinks: () => set(s => ({ showLinks: !s.showLinks })),
   toggleShowRelationLabels: () => set(s => ({ showRelationLabels: !s.showRelationLabels })),
+  setMaxDisplayNodes: (n) => set({ maxDisplayNodes: Math.max(1, Math.floor(Number(n) || 1)) }),
 
   // Auth
   unlockEdit: (code) => {

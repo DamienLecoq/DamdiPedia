@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { forceCollide as d3ForceCollide } from 'd3-force';
+import { forceCollide as d3ForceCollide, forceX as d3ForceX, forceY as d3ForceY } from 'd3-force';
 import GraphErrorBoundary from './GraphErrorBoundary.jsx';
 import { useGraphStore } from '../stores/graphStore.js';
 import { useUiStore } from '../stores/uiStore.js';
@@ -75,6 +75,8 @@ function GraphInner() {
   const toggleShowLinks = useUiStore(s => s.toggleShowLinks);
   const showRelationLabels = useUiStore(s => s.showRelationLabels);
   const toggleShowRelationLabels = useUiStore(s => s.toggleShowRelationLabels);
+  const maxDisplayNodes = useUiStore(s => s.maxDisplayNodes);
+  const setMaxDisplayNodes = useUiStore(s => s.setMaxDisplayNodes);
 
   const editUnlocked = useUiStore(s => s.editUnlocked);
   const addRelation = useGraphStore(s => s.addRelation);
@@ -84,6 +86,7 @@ function GraphInner() {
   const [showCatPanel, setShowCatPanel] = useState(false);
   const [linkMode, setLinkMode] = useState(false);
   const [linkSource, setLinkSource] = useState(null);
+  const [focusedId, setFocusedId] = useState(null);
 
   // Configure d3 forces for better spacing
   useEffect(() => {
@@ -92,6 +95,33 @@ function GraphInner() {
     graphRef.current.d3Force('link').distance(120);
     graphRef.current.d3Force('collision', d3ForceCollide(35));
   }, []);
+
+  // Category anchors — stable ring layout, one slot per category
+  const categoryAnchors = React.useMemo(() => {
+    const cats = [...new Set(visibleNodes.map(n => n.category).filter(Boolean))].sort();
+    const radius = Math.max(220, Math.sqrt(visibleNodes.length) * 65);
+    const map = new Map();
+    cats.forEach((cat, i) => {
+      const angle = (i / Math.max(cats.length, 1)) * Math.PI * 2 - Math.PI / 2;
+      map.set(cat, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
+    });
+    return map;
+  }, [visibleNodes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply per-category attraction — only in live (non-global) mode
+  useEffect(() => {
+    if (!graphRef.current) return;
+    if (graphRenderMode === 'global') {
+      graphRef.current.d3Force('clusterX', null);
+      graphRef.current.d3Force('clusterY', null);
+      return;
+    }
+    const getX = (n) => categoryAnchors.get(n.category)?.x || 0;
+    const getY = (n) => categoryAnchors.get(n.category)?.y || 0;
+    graphRef.current.d3Force('clusterX', d3ForceX(getX).strength(0.09));
+    graphRef.current.d3Force('clusterY', d3ForceY(getY).strength(0.09));
+    graphRef.current.d3ReheatSimulation?.();
+  }, [categoryAnchors, graphRenderMode]);
 
   // Observe container size
   useEffect(() => {
@@ -114,11 +144,7 @@ function GraphInner() {
     if (activeFilters.category) {
       candidates = candidates.filter(n => n.category === activeFilters.category);
     }
-    const isGlobal = graphRenderMode === 'global';
-    const maxNodes = 150;
-    let visibleNodes = isGlobal
-      ? selectTopNodes(candidates, links, maxNodes, null)
-      : candidates.slice(0, 40);
+    const visibleNodes = selectTopNodes(candidates, links, maxDisplayNodes, null);
     const visibleIds = new Set(visibleNodes.map(n => n.id));
     // Normalize source/target — force-graph mutates them from string IDs to node objects
     const visibleLinks = links.filter(l => {
@@ -128,7 +154,7 @@ function GraphInner() {
     });
     const truncated = candidates.length > visibleNodes.length;
     return { visibleNodes, visibleLinks, truncated };
-  }, [nodes, links, graphRenderMode, activeFilters.category]);
+  }, [nodes, links, graphRenderMode, activeFilters.category, maxDisplayNodes]);
 
   // ---------------------------------------------------------------------------
   // Global layout
@@ -186,6 +212,26 @@ function GraphInner() {
   }, [graphData.links]);
 
   // ---------------------------------------------------------------------------
+  // Degree + neighbor maps — computed once per visible graph
+  // ---------------------------------------------------------------------------
+  const { degreeMap, neighborMap, maxDegree } = React.useMemo(() => {
+    const deg = new Map();
+    const neigh = new Map();
+    visibleNodes.forEach(n => { deg.set(n.id, 0); neigh.set(n.id, new Set()); });
+    visibleLinks.forEach(l => {
+      const s = typeof l.source === 'object' ? l.source?.id : l.source;
+      const t = typeof l.target === 'object' ? l.target?.id : l.target;
+      if (deg.has(s)) deg.set(s, deg.get(s) + 1);
+      if (deg.has(t)) deg.set(t, deg.get(t) + 1);
+      if (neigh.has(s) && t != null) neigh.get(s).add(t);
+      if (neigh.has(t) && s != null) neigh.get(t).add(s);
+    });
+    let max = 0;
+    deg.forEach(v => { if (v > max) max = v; });
+    return { degreeMap: deg, neighborMap: neigh, maxDegree: max };
+  }, [visibleNodes, visibleLinks]);
+
+  // ---------------------------------------------------------------------------
   // Node click — quiz guard, then select
   // ---------------------------------------------------------------------------
   const handleNodeClick = useCallback((node) => {
@@ -207,7 +253,25 @@ function GraphInner() {
     }
 
     selectNode(node.id);
+    setFocusedId(node.id);
+    // Center and zoom on the focused node
+    if (graphRef.current && node.x != null && node.y != null) {
+      graphRef.current.centerAt(node.x, node.y, 500);
+      graphRef.current.zoom(3.2, 500);
+    }
   }, [selectNode, linkMode, linkSource, addRelation, addToast]);
+
+  // Double-click: reset to global view
+  const handleNodeDoubleClick = useCallback(() => {
+    setFocusedId(null);
+    selectNode(null);
+    if (graphRef.current) graphRef.current.zoomToFit(500, 80);
+  }, [selectNode]);
+
+  const handleBackgroundClick = useCallback(() => {
+    setFocusedId(null);
+    selectNode(null);
+  }, [selectNode]);
 
   // ---------------------------------------------------------------------------
   // Node canvas painter — brain/neural aesthetic with glow
@@ -217,14 +281,28 @@ function GraphInner() {
     const isSelected = node.id === selectedNodeId;
     const isHovered = node.id === hoveredId;
     const isLinkSource = linkMode && node.id === linkSource;
-    const isDimmed = (hoveredId || selectedNodeId) && node.id !== hoveredId && node.id !== selectedNodeId && !isLinkSource;
+    const isFocused = node.id === focusedId;
 
-    const r = isLinkSource ? 8 : isHovered ? 7 : 5.5;
-    ctx.globalAlpha = isDimmed ? 0.15 : 1;
+    // Focus mode (click) takes precedence over hover for the "active anchor"
+    const activeId = focusedId || hoveredId || selectedNodeId;
+    const activeNeighbors = activeId ? neighborMap.get(activeId) : null;
+    const isNeighbor = !!(activeNeighbors && activeNeighbors.has(node.id));
+    const isActive = isFocused || isHovered || isSelected || isLinkSource || isNeighbor;
+    const isDimmed = !!activeId && !isActive;
 
-    // Outer glow (brain neuron effect)
+    // Hierarchical sizing based on degree (√ scale, capped)
+    const degree = degreeMap.get(node.id) || 0;
+    const baseR = Math.min(11, 3.2 + Math.sqrt(degree) * 1.15);
+    const r = isFocused ? baseR + 2.5 : isLinkSource ? baseR + 3 : isHovered ? baseR + 1.6 : baseR;
+
+    // Baseline opacity: focus mode dims non-subgraph much more than hover alone
+    const dimLevel = focusedId ? 0.03 : 0.08;
+    const baseAlpha = activeId ? (isActive ? 1 : dimLevel) : 0.78;
+    ctx.globalAlpha = baseAlpha;
+
+    // Outer glow — reserved for interactive/active states
     ctx.shadowColor = isLinkSource ? '#00ff88' : color;
-    ctx.shadowBlur = isLinkSource ? 28 : isSelected ? 24 : isHovered ? 16 : 10;
+    ctx.shadowBlur = isLinkSource ? 28 : isSelected ? 24 : isHovered ? 18 : (isNeighbor ? 8 : 4);
 
     ctx.beginPath();
     ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
@@ -238,16 +316,34 @@ function GraphInner() {
     ctx.fillStyle = 'rgba(255,255,255,0.75)';
     ctx.fill();
 
-    ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
 
-    // Label
-    const fontSize = Math.max(10 / globalScale, 3);
-    ctx.font = `${fontSize}px sans-serif`;
-    ctx.fillStyle = isDimmed ? 'rgba(180,200,255,0.15)' : 'rgba(220,235,255,0.9)';
-    ctx.textAlign = 'center';
-    ctx.fillText(node.label, node.x, node.y + r + fontSize + 1);
-  }, [selectedNodeId, hoveredId, linkMode, linkSource]);
+    // Label — conditional visibility
+    // Show when: hovered/selected/linkSource, neighbor of active, zoomed-in enough,
+    // or high-degree "hub" node (macro-level importance)
+    const isHub = maxDegree > 0 && degree >= Math.max(4, maxDegree * 0.55);
+    const zoomedIn = globalScale >= 1.6;
+    const showLabel = isHovered || isSelected || isLinkSource
+      || isNeighbor
+      || zoomedIn
+      || (isHub && !activeId);
+
+    if (showLabel) {
+      const fontSize = Math.max(10 / globalScale, 3);
+      ctx.font = `${fontSize}px sans-serif`;
+      const labelAlpha = isHovered || isSelected || isLinkSource
+        ? 1
+        : isNeighbor ? 0.9
+        : isHub && !activeId ? 0.55
+        : 0.75;
+      ctx.globalAlpha = baseAlpha * labelAlpha;
+      ctx.fillStyle = 'rgba(220,235,255,0.95)';
+      ctx.textAlign = 'center';
+      ctx.fillText(node.label, node.x, node.y + r + fontSize + 1);
+    }
+
+    ctx.globalAlpha = 1;
+  }, [selectedNodeId, hoveredId, focusedId, linkMode, linkSource, neighborMap, degreeMap, maxDegree]);
 
   // ---------------------------------------------------------------------------
   // Link canvas painter — neural synapse style with glow
@@ -267,24 +363,45 @@ function GraphInner() {
     // to avoid rendering two overlapping lines
     if (isBiDir && srcId > tgtId) return;
 
-    const isDimmed = (hoveredId || selectedNodeId)
-      && srcId !== hoveredId && tgtId !== hoveredId
-      && srcId !== selectedNodeId && tgtId !== selectedNodeId;
-    const isHighlighted = !isDimmed && (
-      srcId === hoveredId || tgtId === hoveredId ||
-      srcId === selectedNodeId || tgtId === selectedNodeId
-    );
+    // Focus mode takes precedence: any link outside the focused 1-hop neighborhood
+    // becomes near-invisible, everything inside glows
+    const activeId = focusedId || hoveredId || selectedNodeId;
+    const touchesActive = activeId && (srcId === activeId || tgtId === activeId);
+    const isDimmed = !!activeId && !touchesActive;
+    const isHighlighted = !isDimmed && touchesActive;
     const w = link.weight || 1;
+    const isInterCat = src.category && tgt.category && src.category !== tgt.category;
 
     const mx = (src.x + tgt.x) / 2;
     const my = (src.y + tgt.y) / 2;
 
     ctx.save();
-    ctx.globalAlpha = isDimmed ? 0.02 : isHighlighted ? Math.min(w * 0.45 + 0.35, 0.85) : w * 0.12 + 0.04;
-    ctx.strokeStyle = isHighlighted ? '#b07fff' : '#7c4dff';
-    ctx.lineWidth = isHighlighted ? w * 1.2 + 0.5 : w * 0.6 + 0.15;
-    ctx.shadowColor = '#9c6fff';
-    ctx.shadowBlur = isDimmed ? 0 : isHighlighted ? 12 : 2;
+    // Opacity: inter-category links get a stronger baseline (structurally informative)
+    ctx.globalAlpha = isDimmed
+      ? (focusedId ? 0.008 : 0.015)
+      : isHighlighted
+        ? Math.min(w * 0.5 + 0.5, 0.98)
+        : isInterCat
+          ? Math.min(w * 0.15 + 0.38, 0.65)
+          : w * 0.08 + 0.025;
+
+    // Stroke: gradient src→tgt category colors for inter-cat links, purple otherwise
+    if (isInterCat && !isDimmed) {
+      const grad = ctx.createLinearGradient(src.x, src.y, tgt.x, tgt.y);
+      grad.addColorStop(0, getNodeColor(src));
+      grad.addColorStop(1, getNodeColor(tgt));
+      ctx.strokeStyle = grad;
+    } else {
+      ctx.strokeStyle = isHighlighted ? '#b07fff' : '#7c4dff';
+    }
+
+    ctx.lineWidth = isHighlighted
+      ? w * 1.4 + 0.6
+      : isInterCat
+        ? w * 0.6 + 0.25
+        : w * 0.5 + 0.12;
+    ctx.shadowColor = isInterCat ? getNodeColor(tgt) : '#9c6fff';
+    ctx.shadowBlur = isDimmed ? 0 : isHighlighted ? 14 : (isInterCat ? 6 : 0);
 
     ctx.beginPath();
     ctx.moveTo(src.x, src.y);
@@ -316,7 +433,7 @@ function GraphInner() {
     }
 
     ctx.restore();
-  }, [hoveredId, selectedNodeId, showLinks, showRelationLabels, biDirSet, biDirTypeMap]);
+  }, [hoveredId, selectedNodeId, focusedId, showLinks, showRelationLabels, biDirSet, biDirTypeMap]);
 
   const isStaticMode = graphRenderMode === 'global' && !!globalLayoutCache;
 
@@ -400,6 +517,40 @@ function GraphInner() {
         >
           {isMobile ? '✦' : '✦ Types'}
         </button>
+
+        <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 2px' }} />
+
+        <label
+          title="Nombre maximum de nœuds affichés (les plus connectés)"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontSize: '0.72rem', color: 'var(--text-muted)',
+            padding: isMobile ? '0.3rem 0.5rem' : '0.25rem 0.55rem',
+            background: 'rgba(10, 7, 28, 0.55)',
+            border: '1px solid var(--border)',
+            borderRadius: 6,
+          }}
+        >
+          <span>Max</span>
+          <input
+            type="number"
+            min={1}
+            max={Math.max(1, nodes.length)}
+            step={10}
+            value={maxDisplayNodes}
+            onChange={(e) => setMaxDisplayNodes(e.target.value)}
+            style={{
+              width: 56,
+              background: 'transparent',
+              border: 'none',
+              borderBottom: '1px solid var(--border)',
+              color: 'var(--text)',
+              fontSize: '0.72rem',
+              padding: '1px 2px',
+              outline: 'none',
+            }}
+          />
+        </label>
 
         {editUnlocked && (
           <button
@@ -554,8 +705,8 @@ function GraphInner() {
           borderRadius: 6, padding: '4px 10px', fontSize: '0.73rem', color: 'var(--warning)',
         }}>
           {activeFilters.category
-            ? `Affichage de 40 sur ${nodes.filter(n => n.category === activeFilters.category).length} dans « ${activeFilters.category} »`
-            : `Top 150 sur ${nodes.length} nœuds`}
+            ? `Top ${visibleNodes.length} sur ${nodes.filter(n => n.category === activeFilters.category).length} dans « ${activeFilters.category} »`
+            : `Top ${visibleNodes.length} sur ${nodes.length} nœuds`}
         </div>
       )}
 
@@ -584,7 +735,8 @@ function GraphInner() {
         linkCanvasObjectMode={() => 'replace'}
         linkCanvasObject={paintLink}
         onNodeClick={handleNodeClick}
-        onBackgroundClick={() => selectNode(null)}
+        onNodeRightClick={handleNodeDoubleClick}
+        onBackgroundClick={handleBackgroundClick}
         onNodeHover={(node) => setHoveredId(node ? node.id : null)}
         d3AlphaDecay={isStaticMode ? 1 : 0.0228}
         d3VelocityDecay={isStaticMode ? 1 : 0.4}
