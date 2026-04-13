@@ -93,9 +93,9 @@ function GraphInner() {
   // Configure d3 forces for better spacing
   useEffect(() => {
     if (!graphRef.current) return;
-    graphRef.current.d3Force('charge').strength(-340);
-    graphRef.current.d3Force('link').distance(120);
-    graphRef.current.d3Force('collision', d3ForceCollide(35));
+    graphRef.current.d3Force('charge').strength(-420);
+    graphRef.current.d3Force('link').distance(155);
+    graphRef.current.d3Force('collision', d3ForceCollide(42));
   }, []);
 
   // Observe container size
@@ -429,11 +429,19 @@ function GraphInner() {
     const isInterCat = src.category && tgt.category && src.category !== tgt.category;
 
     // Curved link — quadratic bezier, control point offset perpendicular to
-    // the chord. More curvature for inter-category links to separate them
-    // visually from intra-cluster links.
+    // the chord. Curvature scales with link length: short links stay near
+    // straight, long links arc far out so they don't cross the node cloud.
+    // Direction alternates by node id hash so parallel long links don't overlap.
     const dx = tgt.x - src.x;
     const dy = tgt.y - src.y;
-    const curvature = isInterCat ? 0.30 : 0.22;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const lengthFactor = Math.min(1, Math.max(0, (len - 90) / 220));
+    const baseCurv = isInterCat ? 0.22 : 0.14;
+    const maxCurv = isInterCat ? 0.55 : 0.42;
+    const curvMag = baseCurv + (maxCurv - baseCurv) * lengthFactor;
+    // Alternate side: simple hash of ids to get a stable ±1
+    const hash = (srcId.charCodeAt(0) + tgtId.charCodeAt(0)) & 1 ? 1 : -1;
+    const curvature = curvMag * hash;
     const cpx = (src.x + tgt.x) / 2 + dy * curvature;
     const cpy = (src.y + tgt.y) / 2 - dx * curvature;
 
@@ -457,14 +465,15 @@ function GraphInner() {
     const my = (src.y + 2 * cpy + tgt.y) / 4;
 
     ctx.save();
-    // Opacity: inter-category links get a stronger baseline (structurally informative)
+    // Opacity: inter-category links dominate at rest (structure),
+    // intra-cat calmer so the cluster doesn't turn into a fur ball
     const rawAlpha = isDimmed
       ? (focusedId ? 0.008 : 0.015)
       : isHighlighted
         ? Math.min(w * 0.5 + 0.55, 0.98)
         : isInterCat
-          ? Math.min(w * 0.2 + 0.45, 0.75)
-          : Math.min(w * 0.3 + 0.22, 0.55);
+          ? Math.min(w * 0.2 + 0.5, 0.78)
+          : Math.min(w * 0.2 + 0.18, 0.38);
     ctx.globalAlpha = rawAlpha * zoomAlpha;
 
     // Stroke: gradient src→tgt category colors for inter-cat links, purple otherwise
@@ -478,10 +487,10 @@ function GraphInner() {
     }
 
     ctx.lineWidth = isHighlighted
-      ? w * 1.4 + 0.8
+      ? w * 1.4 + 0.9
       : isInterCat
-        ? w * 0.7 + 0.45
-        : w * 0.6 + 0.4;
+        ? w * 0.7 + 0.5
+        : w * 0.5 + 0.3;
     ctx.shadowColor = isInterCat ? getNodeColor(tgt) : '#9c6fff';
     ctx.shadowBlur = isDimmed ? 0 : isHighlighted ? 14 : (isInterCat ? 6 : 0);
 
