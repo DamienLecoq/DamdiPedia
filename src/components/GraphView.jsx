@@ -429,11 +429,11 @@ function GraphInner() {
     const isInterCat = src.category && tgt.category && src.category !== tgt.category;
 
     // Curved link — quadratic bezier, control point offset perpendicular to
-    // the chord. Inter-category links curve more to visually separate them
-    // from the straight spaghetti of intra-cat links.
+    // the chord. More curvature for inter-category links to separate them
+    // visually from intra-cluster links.
     const dx = tgt.x - src.x;
     const dy = tgt.y - src.y;
-    const curvature = isInterCat ? 0.18 : 0.12;
+    const curvature = isInterCat ? 0.30 : 0.22;
     const cpx = (src.x + tgt.x) / 2 + dy * curvature;
     const cpy = (src.y + tgt.y) / 2 - dx * curvature;
 
@@ -461,10 +461,10 @@ function GraphInner() {
     const rawAlpha = isDimmed
       ? (focusedId ? 0.008 : 0.015)
       : isHighlighted
-        ? Math.min(w * 0.5 + 0.5, 0.98)
+        ? Math.min(w * 0.5 + 0.55, 0.98)
         : isInterCat
-          ? Math.min(w * 0.15 + 0.38, 0.65)
-          : w * 0.08 + 0.025;
+          ? Math.min(w * 0.2 + 0.45, 0.75)
+          : Math.min(w * 0.3 + 0.22, 0.55);
     ctx.globalAlpha = rawAlpha * zoomAlpha;
 
     // Stroke: gradient src→tgt category colors for inter-cat links, purple otherwise
@@ -478,10 +478,10 @@ function GraphInner() {
     }
 
     ctx.lineWidth = isHighlighted
-      ? w * 1.4 + 0.6
+      ? w * 1.4 + 0.8
       : isInterCat
-        ? w * 0.6 + 0.25
-        : w * 0.5 + 0.12;
+        ? w * 0.7 + 0.45
+        : w * 0.6 + 0.4;
     ctx.shadowColor = isInterCat ? getNodeColor(tgt) : '#9c6fff';
     ctx.shadowBlur = isDimmed ? 0 : isHighlighted ? 14 : (isInterCat ? 6 : 0);
 
