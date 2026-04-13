@@ -143,6 +143,19 @@ function GraphInner() {
     return map;
   }, [visibleNodes]);
 
+  // Continuous rAF loop while hovering/focusing — keeps the pulse ring
+  // animating even when the d3 simulation has cooled down
+  useEffect(() => {
+    if (!hoveredId && !focusedId) return;
+    let raf = 0;
+    const tick = () => {
+      graphRef.current?.refresh?.();
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [hoveredId, focusedId]);
+
   // Apply per-category attraction — only in live (non-global) mode
   useEffect(() => {
     if (!graphRef.current) return;
@@ -296,15 +309,16 @@ function GraphInner() {
     const isActive = isFocused || isHovered || isSelected || isLinkSource || isNeighbor;
     const isDimmed = !!activeId && !isActive;
 
-    // Hierarchical sizing based on degree (√ scale, capped)
+    // Hierarchical sizing — hubs get a stronger boost so the macro spine
+    // of the graph (Git, Docker, Python…) visually dominates at a glance
     const degree = degreeMap.get(node.id) || 0;
-    const baseR = Math.min(11, 3.2 + Math.sqrt(degree) * 1.15);
-    const r = isFocused ? baseR + 2.5 : isLinkSource ? baseR + 3 : isHovered ? baseR + 1.6 : baseR;
+    const hubThresholdLocal = Math.max(3, maxDegree * 0.35);
+    const isHubLocal = degree >= hubThresholdLocal;
+    const baseR = Math.min(14, 3.4 + Math.sqrt(degree) * (isHubLocal ? 1.55 : 1.15));
+    const r = isFocused ? baseR + 2.5 : isLinkSource ? baseR + 3 : isHovered ? baseR + 1.8 : baseR;
 
     // Progressive disclosure — at low zoom, only hubs are visible
     // Smooth fade between zoomFadeStart and zoomFadeEnd for non-hubs
-    const hubThreshold = Math.max(3, maxDegree * 0.35);
-    const isHubLocal = degree >= hubThreshold;
     let zoomAlpha = 1;
     if (!isHubLocal && !isActive) {
       const zoomFadeStart = 0.35;
@@ -343,6 +357,19 @@ function GraphInner() {
 
     ctx.shadowBlur = 0;
 
+    // Pulse ring — animated expanding circle on hovered node
+    if (isHovered || isFocused) {
+      const t = (Date.now() % 1600) / 1600;
+      const pulseR = r + 4 + t * 14;
+      ctx.globalAlpha = Math.max(0, 0.55 * (1 - t));
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, pulseR, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.globalAlpha = baseAlpha;
+    }
+
     // Label — conditional visibility
     // Show when: hovered/selected/linkSource, neighbor of active, zoomed-in enough,
     // or high-degree "hub" node (macro-level importance — threshold aligned
@@ -356,7 +383,7 @@ function GraphInner() {
 
     if (showLabel) {
       const fontSize = Math.max(10 / globalScale, 3);
-      ctx.font = `${fontSize}px sans-serif`;
+      ctx.font = `500 ${fontSize}px Inter, system-ui, -apple-system, sans-serif`;
       const labelWidth = ctx.measureText(node.label).width;
       const ly = node.y + r + fontSize + 1;
       const rectX = node.x - labelWidth / 2 - 1;
@@ -460,6 +487,10 @@ function GraphInner() {
     }
     if (zoomAlpha <= 0.02) return;
 
+    // Architecture mode — at low zoom hide intra-cat links entirely,
+    // only inter-cluster bridges remain so the macro structure is clear
+    if (!isInterCat && !touchesActive && globalScale < 0.7) return;
+
     // Curve midpoint at t=0.5 of a quadratic bezier: (P0 + 2*CP + P2) / 4
     const mx = (src.x + 2 * cpx + tgt.x) / 4;
     const my = (src.y + 2 * cpy + tgt.y) / 4;
@@ -504,7 +535,7 @@ function GraphInner() {
       const fontSize = Math.max(9 / globalScale, 2);
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 0.8;
-      ctx.font = `${fontSize}px sans-serif`;
+      ctx.font = `500 ${fontSize}px Inter, system-ui, -apple-system, sans-serif`;
       ctx.fillStyle = '#b0c4ff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -574,7 +605,7 @@ function GraphInner() {
 
       // Watermark label — centered, faint, scales with zoom
       const fontSize = Math.max(16 / globalScale, 9);
-      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.font = `800 ${fontSize}px Inter, system-ui, -apple-system, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.globalAlpha = focusedId ? 0.08 : 0.22;
@@ -621,8 +652,20 @@ function GraphInner() {
     return <div ref={containerRef} style={{ flex: 1, position: 'relative', overflow: 'hidden' }}><EmptyState /></div>;
   }
 
+  const focusedNode = focusedId ? graphData.nodes.find(n => n.id === focusedId) : null;
+  const focusedDegree = focusedId ? (degreeMap.get(focusedId) || 0) : 0;
+
   return (
-    <div ref={containerRef} style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+    <div
+      ref={containerRef}
+      style={{
+        flex: 1,
+        position: 'relative',
+        overflow: 'hidden',
+        // Subtle radial vignette — anchors the eye at the center
+        background: 'radial-gradient(ellipse at center, rgba(40, 28, 80, 0.28) 0%, rgba(10, 7, 28, 0.05) 55%, rgba(4, 2, 14, 0.6) 100%)',
+      }}
+    >
       {/* Controls toolbar — view mode + visual toggles */}
       <div style={{ position: 'absolute', top: isMobile ? 8 : 12, left: isMobile ? 8 : 12, zIndex: 10, display: 'flex', gap: isMobile ? 4 : 6, alignItems: 'center', flexWrap: isMobile ? 'wrap' : 'nowrap', maxWidth: isMobile ? 'calc(100% - 16px)' : 'none' }}>
         <button
@@ -828,6 +871,51 @@ function GraphInner() {
       >
         {isMobile ? '⊙' : `⊙ ${selectedNodeId ? 'Centrer sur le nœud' : 'Recadrer'}`}
       </button>
+
+      {/* Focused node info — compact overlay showing focused node stats */}
+      {focusedNode && (
+        <div style={{
+          position: 'absolute', bottom: 64, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 10,
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '0.5rem 0.9rem',
+          background: 'rgba(10, 7, 28, 0.82)',
+          backdropFilter: 'blur(22px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(22px) saturate(180%)',
+          border: '1px solid var(--border)',
+          borderTopColor: 'var(--border-hi)',
+          borderRadius: 10,
+          boxShadow: '0 10px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)',
+          fontSize: '0.78rem',
+          maxWidth: 'calc(100% - 32px)',
+        }}>
+          <div style={{
+            width: 10, height: 10, borderRadius: '50%',
+            background: getNodeColor(focusedNode),
+            boxShadow: `0 0 8px ${getNodeColor(focusedNode)}`,
+            flexShrink: 0,
+          }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            <span style={{ color: 'var(--text)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {focusedNode.label}
+            </span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }}>
+              {focusedNode.category} · {focusedDegree} connexion{focusedDegree > 1 ? 's' : ''}
+            </span>
+          </div>
+          <button
+            onClick={handleBackgroundClick}
+            title="Quitter le focus"
+            style={{
+              background: 'none', border: 'none', color: 'var(--text-muted)',
+              cursor: 'pointer', fontSize: '0.9rem', padding: '0 2px',
+              lineHeight: 1, flexShrink: 0,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Link mode indicator */}
       {linkMode && (
