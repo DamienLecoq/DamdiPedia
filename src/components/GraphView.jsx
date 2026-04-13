@@ -96,33 +96,6 @@ function GraphInner() {
     graphRef.current.d3Force('collision', d3ForceCollide(35));
   }, []);
 
-  // Category anchors — stable ring layout, one slot per category
-  const categoryAnchors = React.useMemo(() => {
-    const cats = [...new Set(visibleNodes.map(n => n.category).filter(Boolean))].sort();
-    const radius = Math.max(220, Math.sqrt(visibleNodes.length) * 65);
-    const map = new Map();
-    cats.forEach((cat, i) => {
-      const angle = (i / Math.max(cats.length, 1)) * Math.PI * 2 - Math.PI / 2;
-      map.set(cat, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
-    });
-    return map;
-  }, [visibleNodes]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Apply per-category attraction — only in live (non-global) mode
-  useEffect(() => {
-    if (!graphRef.current) return;
-    if (graphRenderMode === 'global') {
-      graphRef.current.d3Force('clusterX', null);
-      graphRef.current.d3Force('clusterY', null);
-      return;
-    }
-    const getX = (n) => categoryAnchors.get(n.category)?.x || 0;
-    const getY = (n) => categoryAnchors.get(n.category)?.y || 0;
-    graphRef.current.d3Force('clusterX', d3ForceX(getX).strength(0.09));
-    graphRef.current.d3Force('clusterY', d3ForceY(getY).strength(0.09));
-    graphRef.current.d3ReheatSimulation?.();
-  }, [categoryAnchors, graphRenderMode]);
-
   // Observe container size
   useEffect(() => {
     if (!containerRef.current) return;
@@ -155,6 +128,33 @@ function GraphInner() {
     const truncated = candidates.length > visibleNodes.length;
     return { visibleNodes, visibleLinks, truncated };
   }, [nodes, links, graphRenderMode, activeFilters.category, maxDisplayNodes]);
+
+  // Category anchors — stable ring layout, one slot per category
+  const categoryAnchors = React.useMemo(() => {
+    const cats = [...new Set(visibleNodes.map(n => n.category).filter(Boolean))].sort();
+    const radius = Math.max(220, Math.sqrt(visibleNodes.length) * 65);
+    const map = new Map();
+    cats.forEach((cat, i) => {
+      const angle = (i / Math.max(cats.length, 1)) * Math.PI * 2 - Math.PI / 2;
+      map.set(cat, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
+    });
+    return map;
+  }, [visibleNodes]);
+
+  // Apply per-category attraction — only in live (non-global) mode
+  useEffect(() => {
+    if (!graphRef.current) return;
+    if (graphRenderMode === 'global') {
+      graphRef.current.d3Force('clusterX', null);
+      graphRef.current.d3Force('clusterY', null);
+      return;
+    }
+    const getX = (n) => categoryAnchors.get(n.category)?.x || 0;
+    const getY = (n) => categoryAnchors.get(n.category)?.y || 0;
+    graphRef.current.d3Force('clusterX', d3ForceX(getX).strength(0.09));
+    graphRef.current.d3Force('clusterY', d3ForceY(getY).strength(0.09));
+    graphRef.current.d3ReheatSimulation?.();
+  }, [categoryAnchors, graphRenderMode]);
 
   // ---------------------------------------------------------------------------
   // Global layout
