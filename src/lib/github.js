@@ -49,6 +49,30 @@ export async function commitFile(filename, content) {
   if (sha) _shaCache[filename] = sha;
 }
 
+// ── Batch commit: bundle multiple files in a single GitHub commit ────────────
+
+export async function commitFiles(filesMap, message) {
+  if (!PROXY_URL) return;
+
+  const res = await fetch(`${PROXY_URL}/vault/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      files: filesMap,
+      message,
+      password: import.meta.env.VITE_EDIT_PASSWORD || '',
+    }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Proxy error ${res.status}`);
+  }
+
+  const { shas } = await res.json();
+  if (shas) Object.assign(_shaCache, shas);
+}
+
 // ── Delete a file ────────────────────────────────────────────────────────────
 
 export async function deleteFile(filename) {

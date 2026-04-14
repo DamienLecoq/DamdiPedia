@@ -133,14 +133,14 @@ function TopNav({ onShowAuth }) {
       return;
     }
 
-    // Multiple files → create nodes directly
-    const createNode = useGraphStore.getState().createNode;
-    let ok = 0, fail = 0;
+    // Multiple files → parse all, then createNodesBatch (single GitHub commit)
+    const formDataList = [];
+    let parseFail = 0;
     for (const file of files) {
       try {
         const text = await file.text();
         const { data, content } = matter(text);
-        await createNode({
+        formDataList.push({
           id: data.id || undefined,
           label: data.label || file.name.replace(/\.md$/i, ''),
           category: data.category || 'concept',
@@ -151,13 +151,23 @@ function TopNav({ onShowAuth }) {
           resources: Array.isArray(data.resources) ? data.resources : [],
           markdown_body: content || '',
         });
-        ok++;
       } catch (err) {
         console.error('[import]', file.name, err);
-        fail++;
+        parseFail++;
       }
     }
-    addToast(`${ok} nœud${ok > 1 ? 's' : ''} importé${ok > 1 ? 's' : ''}${fail ? `, ${fail} erreur${fail > 1 ? 's' : ''}` : ''}.`, fail ? 'warning' : 'success');
+
+    if (formDataList.length) {
+      try {
+        await useGraphStore.getState().createNodesBatch(formDataList);
+      } catch (err) {
+        addToast(`Import échoué : ${err.message}`, 'error');
+        return;
+      }
+    }
+    if (parseFail) {
+      addToast(`${parseFail} fichier${parseFail > 1 ? 's' : ''} non parsé${parseFail > 1 ? 's' : ''}.`, 'warning');
+    }
   };
 
   const NavBtn = ({ view, label, icon }) => (

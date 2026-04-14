@@ -82,7 +82,7 @@ export function loadVaultFiles(files) {
 // ---------------------------------------------------------------------------
 // writeNode — verifyYamlRoundTrip then write to folder or ZIP
 // ---------------------------------------------------------------------------
-export async function writeNode(node) {
+export async function writeNode(node, opts = {}) {
   const { _handle, _filename, markdown_body, ...frontmatterData } = node;
 
   // color: omit from YAML when not set (must delete, not set to undefined — js-yaml 3 throws on undefined)
@@ -97,16 +97,16 @@ export async function writeNode(node) {
   if (_storageMode === 'folder') {
     if (!_dirHandle) throw new Error('No folder open');
     await writeNodeToFolder(node, _dirHandle);
-    return;
+    return serialized;
   }
 
   if (_storageMode === 'zip' || _storageMode === 'vault') {
     writeNodeToZip(node);
     if (_storageMode === 'vault') {
       syncVaultFile(node._filename, serialized);
-      // Await the GitHub commit so callers (notably batch imports) know the
-      // file actually reached the remote before reporting success.
-      if (ghConfigured()) {
+      // Await the GitHub commit so callers know the file reached the remote.
+      // Batch callers pass skipGhCommit to defer commit to a single batch call.
+      if (!opts.skipGhCommit && ghConfigured()) {
         try {
           await ghCommit(node._filename, serialized);
         } catch (e) {
@@ -115,7 +115,7 @@ export async function writeNode(node) {
         }
       }
     }
-    return;
+    return serialized;
   }
 
   throw new Error(`Unknown storage mode: ${_storageMode}`);

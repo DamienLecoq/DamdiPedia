@@ -20,7 +20,7 @@ const BRANCH = 'main';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, PUT, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
@@ -132,6 +132,61 @@ async function handlePutFile(token, filename, content, password, editPassword) {
   return json({ sha: result.content.sha });
 }
 
+async function handleBatch(token, filesMap, password, editPassword, message) {
+  if (editPassword && password !== editPassword) return err('Unauthorized', 401);
+  const entries = Object.entries(filesMap || {});
+  if (!entries.length) return err('No files provided', 400);
+
+  // 1. Current branch ref
+  const ref = await ghApi(token, `/git/ref/heads/${BRANCH}`);
+  const parentCommitSha = ref.object.sha;
+
+  // 2. Parent commit (for base tree)
+  const parentCommit = await ghApi(token, `/git/commits/${parentCommitSha}`);
+  const baseTreeSha = parentCommit.tree.sha;
+
+  // 3. Create a blob per file (parallel)
+  const blobs = await Promise.all(
+    entries.map(async ([filename, content]) => {
+      const blob = await ghApi(token, `/git/blobs`, {
+        method: 'POST',
+        body: JSON.stringify({ content: utf8ToBase64(content), encoding: 'base64' }),
+      });
+      return { filename, path: resolveGhPath(filename), sha: blob.sha };
+    }),
+  );
+
+  // 4. Create tree (based on parent tree + new blobs)
+  const tree = await ghApi(token, `/git/trees`, {
+    method: 'POST',
+    body: JSON.stringify({
+      base_tree: baseTreeSha,
+      tree: blobs.map(b => ({ path: b.path, mode: '100644', type: 'blob', sha: b.sha })),
+    }),
+  });
+
+  // 5. Create commit pointing to new tree
+  const commitMsg = message || `Import ${entries.length} file${entries.length > 1 ? 's' : ''}`;
+  const newCommit = await ghApi(token, `/git/commits`, {
+    method: 'POST',
+    body: JSON.stringify({
+      message: commitMsg,
+      tree: tree.sha,
+      parents: [parentCommitSha],
+    }),
+  });
+
+  // 6. Fast-forward branch ref
+  await ghApi(token, `/git/refs/heads/${BRANCH}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ sha: newCommit.sha }),
+  });
+
+  const shas = {};
+  blobs.forEach(b => { shas[b.filename] = b.sha; });
+  return json({ ok: true, commit: newCommit.sha, shas });
+}
+
 async function handleDeleteFile(token, filename, password, editPassword) {
   if (editPassword && password !== editPassword) return err('Unauthorized', 401);
 
@@ -178,6 +233,12 @@ export default {
       if (request.method === 'PUT' && putMatch) {
         const body = await request.json();
         return await handlePutFile(token, putMatch[1], body.content, body.password, env.EDIT_PASSWORD);
+      }
+
+      // POST /vault/batch — bundle many files in a single commit
+      if (request.method === 'POST' && path === '/vault/batch') {
+        const body = await request.json();
+        return await handleBatch(token, body.files, body.password, env.EDIT_PASSWORD, body.message);
       }
 
       // DELETE /vault/:filename — delete

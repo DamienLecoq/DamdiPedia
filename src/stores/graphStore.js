@@ -5,7 +5,7 @@ import { slugify } from '../lib/slugify.js';
 import { saveHandleToIDB } from '../lib/fs.js';
 import { useUiStore } from './uiStore.js';
 import { getGlobalBuiltInFiles, getGlobalUserContent, migrateOldVaultContent } from '../lib/vaultLoader.js';
-import { isConfigured as ghConfigured, fetchVaultFiles } from '../lib/github.js';
+import { isConfigured as ghConfigured, fetchVaultFiles, commitFiles } from '../lib/github.js';
 import { syncExercisesFromVault } from '../lib/exercises.js';
 
 export const useGraphStore = create((set, get) => ({
@@ -145,6 +145,76 @@ export const useGraphStore = create((set, get) => ({
     get().addNodeInMemory(node);
     addToast(`Node '${node.label}' created.`, 'success');
     return node;
+  },
+
+  // ── createNodesBatch — bulk import bundled in a single GitHub commit ──────
+  createNodesBatch: async (formDataList) => {
+    const { nodes, storageMode } = get();
+    const { addToast } = useUiStore.getState();
+
+    const existingIds = new Set(nodes.map(n => n.id));
+    const created = [];
+    const serializedMap = {};
+    const failures = [];
+
+    for (const formData of formDataList) {
+      const baseId = formData.id || slugify(formData.label || 'unnamed');
+      let id = baseId;
+      let suffix = 2;
+      while (existingIds.has(id)) id = `${baseId}-${suffix++}`;
+      existingIds.add(id);
+
+      const node = normalizeNode({
+        ...formData,
+        id,
+        _filename: id + '.md',
+        _handle: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      try {
+        const serialized = await storage.writeNode(node, { skipGhCommit: true });
+        serializedMap[node._filename] = serialized;
+        created.push(node);
+      } catch (e) {
+        console.error('[createNodesBatch] Local write failed for', node.id, e);
+        failures.push({ id: node.id, error: e.message });
+      }
+    }
+
+    // Single state update for all successful writes
+    if (created.length) {
+      set(s => {
+        const newNodes = [...s.nodes, ...created];
+        const links = buildLinks(newNodes);
+        const { clusters } = buildGraph(newNodes);
+        const warnings = refreshWarnings(newNodes, s.warnings);
+        const zipDirty = s.storageMode === 'zip' ? true : s.zipDirty;
+        return { nodes: newNodes, links, clusters, warnings, globalLayoutCache: null, zipDirty };
+      });
+    }
+
+    // Single GitHub commit for the whole batch
+    if (storageMode === 'vault' && ghConfigured() && Object.keys(serializedMap).length) {
+      try {
+        await commitFiles(
+          serializedMap,
+          `Import ${created.length} node${created.length > 1 ? 's' : ''}`,
+        );
+      } catch (e) {
+        console.error('[createNodesBatch] GitHub batch commit failed:', e);
+        addToast(`Local OK but GitHub sync failed: ${e.message}`, 'warning');
+        throw e;
+      }
+    }
+
+    const failMsg = failures.length ? `, ${failures.length} erreur${failures.length > 1 ? 's' : ''}` : '';
+    addToast(
+      `${created.length} nœud${created.length > 1 ? 's' : ''} importé${created.length > 1 ? 's' : ''}${failMsg}.`,
+      failures.length ? 'warning' : 'success',
+    );
+    return created;
   },
 
   // ── saveEditorNode — create or update (with optional rename) ──────────────
