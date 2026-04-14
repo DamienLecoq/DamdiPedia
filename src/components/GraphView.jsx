@@ -155,23 +155,6 @@ function GraphInner() {
     return () => cancelAnimationFrame(raf);
   }, [hoveredId, selectedNodeId]);
 
-  // Auto-center + zoom whenever selectedNodeId changes (click OR search)
-  // Runs after the simulation has had a chance to give the node coordinates
-  useEffect(() => {
-    if (!selectedNodeId || !graphRef.current) return;
-    const animate = () => {
-      const node = graphData.nodes.find(n => n.id === selectedNodeId);
-      if (node && node.x != null && node.y != null) {
-        graphRef.current.centerAt(node.x, node.y, 500);
-        graphRef.current.zoom(3.2, 500);
-      } else {
-        // Node not yet positioned — retry next frame
-        requestAnimationFrame(animate);
-      }
-    };
-    animate();
-  }, [selectedNodeId, graphData.nodes]);
-
   // Apply per-category attraction — only in live (non-global) mode
   useEffect(() => {
     if (!graphRef.current) return;
@@ -641,6 +624,24 @@ function GraphInner() {
       }
     }
     graphRef.current.zoomToFit(400, 60);
+  }, [selectedNodeId, graphData.nodes]);
+
+  // Auto-center + zoom whenever selectedNodeId changes (click OR search)
+  useEffect(() => {
+    if (!selectedNodeId || !graphRef.current) return;
+    let raf = 0;
+    let tries = 0;
+    const animate = () => {
+      const node = graphData.nodes.find(n => n.id === selectedNodeId);
+      if (node && node.x != null && node.y != null) {
+        graphRef.current.centerAt(node.x, node.y, 500);
+        graphRef.current.zoom(3.2, 500);
+      } else if (tries++ < 60) {
+        raf = requestAnimationFrame(animate);
+      }
+    };
+    animate();
+    return () => { if (raf) cancelAnimationFrame(raf); };
   }, [selectedNodeId, graphData.nodes]);
 
   // ---------------------------------------------------------------------------
