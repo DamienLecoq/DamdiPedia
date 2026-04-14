@@ -86,7 +86,6 @@ function GraphInner() {
   const [showCatPanel, setShowCatPanel] = useState(false);
   const [linkMode, setLinkMode] = useState(false);
   const [linkSource, setLinkSource] = useState(null);
-  const [focusedId, setFocusedId] = useState(null);
   // Accumulates label bounding rects for the current frame to avoid overlap
   const labelRectsRef = useRef([]);
 
@@ -143,10 +142,10 @@ function GraphInner() {
     return map;
   }, [visibleNodes]);
 
-  // Continuous rAF loop while hovering/focusing — keeps the pulse ring
+  // Continuous rAF loop while hovering/selecting — keeps the pulse ring
   // animating even when the d3 simulation has cooled down
   useEffect(() => {
-    if (!hoveredId && !focusedId) return;
+    if (!hoveredId && !selectedNodeId) return;
     let raf = 0;
     const tick = () => {
       graphRef.current?.refresh?.();
@@ -154,7 +153,24 @@ function GraphInner() {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [hoveredId, focusedId]);
+  }, [hoveredId, selectedNodeId]);
+
+  // Auto-center + zoom whenever selectedNodeId changes (click OR search)
+  // Runs after the simulation has had a chance to give the node coordinates
+  useEffect(() => {
+    if (!selectedNodeId || !graphRef.current) return;
+    const animate = () => {
+      const node = graphData.nodes.find(n => n.id === selectedNodeId);
+      if (node && node.x != null && node.y != null) {
+        graphRef.current.centerAt(node.x, node.y, 500);
+        graphRef.current.zoom(3.2, 500);
+      } else {
+        // Node not yet positioned — retry next frame
+        requestAnimationFrame(animate);
+      }
+    };
+    animate();
+  }, [selectedNodeId, graphData.nodes]);
 
   // Apply per-category attraction — only in live (non-global) mode
   useEffect(() => {
@@ -271,24 +287,18 @@ function GraphInner() {
       return;
     }
 
+    // Camera animation is handled by the selectedNodeId useEffect so that
+    // both click and search trigger the same visual outcome
     selectNode(node.id);
-    setFocusedId(node.id);
-    // Center and zoom on the focused node
-    if (graphRef.current && node.x != null && node.y != null) {
-      graphRef.current.centerAt(node.x, node.y, 500);
-      graphRef.current.zoom(3.2, 500);
-    }
   }, [selectNode, linkMode, linkSource, addRelation, addToast]);
 
-  // Double-click: reset to global view
+  // Right-click (or dbl-click fallback): reset to global view
   const handleNodeDoubleClick = useCallback(() => {
-    setFocusedId(null);
     selectNode(null);
     if (graphRef.current) graphRef.current.zoomToFit(500, 80);
   }, [selectNode]);
 
   const handleBackgroundClick = useCallback(() => {
-    setFocusedId(null);
     selectNode(null);
   }, [selectNode]);
 
@@ -300,14 +310,12 @@ function GraphInner() {
     const isSelected = node.id === selectedNodeId;
     const isHovered = node.id === hoveredId;
     const isLinkSource = linkMode && node.id === linkSource;
-    const isFocused = node.id === focusedId;
 
-    // Focus mode (click) takes precedence over hover for the "active anchor"
-    const activeId = focusedId || hoveredId || selectedNodeId;
+    // Selection (click or search) takes precedence over hover
+    const activeId = selectedNodeId || hoveredId;
     const activeNeighbors = activeId ? neighborMap.get(activeId) : null;
     const isNeighbor = !!(activeNeighbors && activeNeighbors.has(node.id));
-    const isActive = isFocused || isHovered || isSelected || isLinkSource || isNeighbor;
-    const isDimmed = !!activeId && !isActive;
+    const isActive = isHovered || isSelected || isLinkSource || isNeighbor;
 
     // Hierarchical sizing — hubs get a stronger boost so the macro spine
     // of the graph (Git, Docker, Python…) visually dominates at a glance
@@ -315,7 +323,7 @@ function GraphInner() {
     const hubThresholdLocal = Math.max(3, maxDegree * 0.35);
     const isHubLocal = degree >= hubThresholdLocal;
     const baseR = Math.min(14, 3.4 + Math.sqrt(degree) * (isHubLocal ? 1.55 : 1.15));
-    const r = isFocused ? baseR + 2.5 : isLinkSource ? baseR + 3 : isHovered ? baseR + 1.8 : baseR;
+    const r = isSelected ? baseR + 2.5 : isLinkSource ? baseR + 3 : isHovered ? baseR + 1.8 : baseR;
 
     // Progressive disclosure — at low zoom, only hubs are visible
     // Smooth fade between zoomFadeStart and zoomFadeEnd for non-hubs
@@ -330,7 +338,7 @@ function GraphInner() {
     if (zoomAlpha <= 0.02) return;
 
     // Baseline opacity: focus mode dims non-subgraph much more than hover alone
-    const dimLevel = focusedId ? 0.03 : 0.08;
+    const dimLevel = selectedNodeId ? 0.03 : 0.08;
     const baseAlpha = (activeId ? (isActive ? 1 : dimLevel) : 0.78) * zoomAlpha;
     ctx.globalAlpha = baseAlpha;
 
@@ -358,7 +366,7 @@ function GraphInner() {
     ctx.shadowBlur = 0;
 
     // Pulse ring — animated expanding circle on hovered node
-    if (isHovered || isFocused) {
+    if (isHovered || isSelected) {
       const t = (Date.now() % 1600) / 1600;
       const pulseR = r + 4 + t * 14;
       ctx.globalAlpha = Math.max(0, 0.55 * (1 - t));
@@ -392,7 +400,7 @@ function GraphInner() {
       const rectH = fontSize + 2;
 
       // Anti-overlap: skip passive labels that collide with an already-painted one
-      const forceShow = isHovered || isSelected || isLinkSource || isFocused;
+      const forceShow = isHovered || isSelected || isLinkSource;
       const rects = labelRectsRef.current;
       let collides = false;
       if (!forceShow) {
@@ -426,7 +434,7 @@ function GraphInner() {
     }
 
     ctx.globalAlpha = 1;
-  }, [selectedNodeId, hoveredId, focusedId, linkMode, linkSource, neighborMap, degreeMap, maxDegree]);
+  }, [selectedNodeId, hoveredId, linkMode, linkSource, neighborMap, degreeMap, maxDegree]);
 
   // ---------------------------------------------------------------------------
   // Link canvas painter — neural synapse style with glow
@@ -448,7 +456,7 @@ function GraphInner() {
 
     // Focus mode takes precedence: any link outside the focused 1-hop neighborhood
     // becomes near-invisible, everything inside glows
-    const activeId = focusedId || hoveredId || selectedNodeId;
+    const activeId = selectedNodeId || hoveredId;
     const touchesActive = activeId && (srcId === activeId || tgtId === activeId);
     const isDimmed = !!activeId && !touchesActive;
     const isHighlighted = !isDimmed && touchesActive;
@@ -499,7 +507,7 @@ function GraphInner() {
     // Opacity: inter-category links dominate at rest (structure),
     // intra-cat calmer so the cluster doesn't turn into a fur ball
     const rawAlpha = isDimmed
-      ? (focusedId ? 0.008 : 0.015)
+      ? (selectedNodeId ? 0.008 : 0.015)
       : isHighlighted
         ? Math.min(w * 0.5 + 0.55, 0.98)
         : isInterCat
@@ -555,7 +563,7 @@ function GraphInner() {
     }
 
     ctx.restore();
-  }, [hoveredId, selectedNodeId, focusedId, showLinks, showRelationLabels, biDirSet, biDirTypeMap, degreeMap, maxDegree]);
+  }, [hoveredId, selectedNodeId, showLinks, showRelationLabels, biDirSet, biDirTypeMap, degreeMap, maxDegree]);
 
   // ---------------------------------------------------------------------------
   // Background pre-render — category halos + faint watermark labels
@@ -608,12 +616,12 @@ function GraphInner() {
       ctx.font = `800 ${fontSize}px Inter, system-ui, -apple-system, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.globalAlpha = focusedId ? 0.08 : 0.22;
+      ctx.globalAlpha = selectedNodeId ? 0.08 : 0.22;
       ctx.fillStyle = color;
       ctx.fillText(cat.toUpperCase(), cx, cy);
       ctx.globalAlpha = 1;
     });
-  }, [graphData.nodes, focusedId]);
+  }, [graphData.nodes, selectedNodeId]);
 
   const isStaticMode = graphRenderMode === 'global' && !!globalLayoutCache;
 
@@ -652,8 +660,8 @@ function GraphInner() {
     return <div ref={containerRef} style={{ flex: 1, position: 'relative', overflow: 'hidden' }}><EmptyState /></div>;
   }
 
-  const focusedNode = focusedId ? graphData.nodes.find(n => n.id === focusedId) : null;
-  const focusedDegree = focusedId ? (degreeMap.get(focusedId) || 0) : 0;
+  const focusedNode = selectedNodeId ? graphData.nodes.find(n => n.id === selectedNodeId) : null;
+  const focusedDegree = selectedNodeId ? (degreeMap.get(selectedNodeId) || 0) : 0;
 
   return (
     <div

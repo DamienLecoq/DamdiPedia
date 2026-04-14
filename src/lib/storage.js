@@ -104,11 +104,15 @@ export async function writeNode(node) {
     writeNodeToZip(node);
     if (_storageMode === 'vault') {
       syncVaultFile(node._filename, serialized);
-      // Async GitHub sync (fire-and-forget; errors are logged, not thrown)
+      // Await the GitHub commit so callers (notably batch imports) know the
+      // file actually reached the remote before reporting success.
       if (ghConfigured()) {
-        ghCommit(node._filename, serialized).catch(e =>
-          console.error('[storage] GitHub commit failed:', e),
-        );
+        try {
+          await ghCommit(node._filename, serialized);
+        } catch (e) {
+          console.error('[storage] GitHub commit failed:', e);
+          throw e;
+        }
       }
     }
     return;
@@ -132,9 +136,12 @@ export async function deleteNode(nodeId) {
     if (_storageMode === 'vault') {
       removeVaultFile(nodeId + '.md');
       if (ghConfigured()) {
-        ghDelete(nodeId + '.md').catch(e =>
-          console.error('[storage] GitHub delete failed:', e),
-        );
+        try {
+          await ghDelete(nodeId + '.md');
+        } catch (e) {
+          console.error('[storage] GitHub delete failed:', e);
+          throw e;
+        }
       }
     }
     return;
